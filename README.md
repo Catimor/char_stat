@@ -1,5 +1,5 @@
 
-# CharStat ![Static Badge](https://img.shields.io/badge/CharStat_MSRV-1.72-purple) ![Static Badge](https://img.shields.io/badge/Version-0.1.0-purple)
+# CharStat ![Static Badge](https://img.shields.io/badge/CharStat_MSRV-1.72-purple) ![Static Badge](https://img.shields.io/badge/Version-0.1.1-purple)
 
 
 
