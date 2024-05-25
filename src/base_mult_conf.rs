@@ -70,7 +70,7 @@ impl BaseMultConf {
 	}
 	
 	pub fn calculate ( &self, value: f64 ) -> f64 {
-		return value * self.multiplier
+		value * self.multiplier
 	}// calculate
 	
 	pub fn set_base ( &mut self, new_val: f64 ) -> Result<(),()> {

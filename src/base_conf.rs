@@ -170,6 +170,7 @@ impl BaseConf {
 }// BaseConf.mult: BaseMultConf
 
 impl Default for BaseConf {
+	#[inline]
 	fn default () -> Self {
 		BaseConf {
 			value: 0.0,

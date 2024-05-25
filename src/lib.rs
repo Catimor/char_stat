@@ -1,33 +1,41 @@
 //#![allow(unused_variables)]
 //#![allow(dead_code)]
+#![allow(clippy::result_unit_err)]
+// temporary, custom error types in dev
 
-//use num;
+//! # CharStat
+//! 
+//! ## Features
+//! 
+//! [x] Modifiers
+//! [ ] Error handling
 
 //pub mod builder;
 //use builder::*;
 
-pub mod bounds;
-use bounds::*;
+mod bounds;
+pub use bounds::*;
 
-pub mod modifier;
-use modifier::*;
+mod modifier;
+pub use modifier::*;
 
 mod mod_mgr;
-use mod_mgr::*;
+pub use mod_mgr::*;
 
-pub mod base_conf;
-use base_conf::*;
+mod base_conf;
+pub use base_conf::*;
 
-pub mod base_mult_conf;
-use base_mult_conf::*;
+mod base_mult_conf;
+pub use base_mult_conf::*;
 
-pub mod upgrade_conf;
-use upgrade_conf::*;
+mod upgrade_conf;
+pub use upgrade_conf::*;
 
-pub mod mod_mult;
-use mod_mult::*;
+mod mod_mult;
+pub use mod_mult::*;
 
-#[derive(Clone, PartialEq, Debug)]
+
+#[derive( Debug, Clone, PartialEq )]
 pub struct CharStat {
 	current_value: f64,
 	time_stamp: u64,
@@ -58,25 +66,25 @@ impl CharStat {
 		mut mod_mult: Option< ModMultConf >, 
 	) -> Self {
 		// modifiers
-		let mut tmp = 0;
+		let mut num_of_mods = 0;
 		
 		if let ( None, Some(_) ) = ( &upgrade, &mod_of_upgrade ) {
 			mod_of_upgrade = None;
 		} else {
-			tmp += 1;
+			num_of_mods += 1;
 		}
 		
 		if let ( None, Some(_) ) = ( &upgrade, &mod_of_base_plus_upgrade ) {
 			mod_of_base_plus_upgrade = None;
 		} else {
-			tmp += 1;
+			num_of_mods += 1;
 		}
 		
-		if let Some(_) = &mod_of_base {
-			tmp += 1;
+		if mod_of_base.is_some() {
+			num_of_mods += 1;
 		}
 		
-		if tmp == 0 {
+		if num_of_mods == 0 {
 			mod_mult = None;
 		}
 		// end modifiers
@@ -104,11 +112,11 @@ impl CharStat {
 		out.update_upgrade();
 		out.update_current_value();
 		
-		return out
+		out
 	}// new
 	
 	pub fn new_minimal ( base: BaseConf ) -> Self {
-		CharStat {
+		let mut out = CharStat {
 			current_value: 0.0,
 			time_stamp: 0,
 			
@@ -125,11 +133,17 @@ impl CharStat {
 			mod_of_upgrade: None,
 			mod_of_base_plus_upgrade: None,
 			mod_mult: None,
-		}
+		};
+		
+		out.update_base();
+		out.update_upgrade();
+		out.update_current_value();
+		
+		out
 	}// new_minimal
 	
 	pub fn new_no_mod ( base: BaseConf, upgrade: Option< UpgradeConf > ) -> Self {
-		CharStat {
+		let mut out = CharStat {
 			current_value: 0.0,
 			time_stamp: 0,
 			
@@ -146,12 +160,18 @@ impl CharStat {
 			mod_of_upgrade: None,
 			mod_of_base_plus_upgrade: None,
 			mod_mult: None,
-		}
-	}// new_minimal
+		};
+		
+		out.update_base();
+		out.update_upgrade();
+		out.update_current_value();
+		
+		out
+	}// new_no_mod
 	
 	pub fn value ( &self ) -> f64 {
 		self.current_value
-	}// value
+	}
 	
 	pub fn set_ts( &mut self, new_val: u64 ) -> Result<(),()> {
 		if new_val < self.time_stamp {
@@ -186,7 +206,7 @@ impl CharStat {
 	}
 	
 	pub fn base ( &self ) -> f64 {
-		if let Some(_) = &self.mod_of_base {
+		if self.mod_of_base.is_some() {
 			return self.val_base + self.val_base_mod
 		}
 		self.val_base
@@ -205,7 +225,7 @@ impl CharStat {
 	}
 	
 	pub fn upgrade_raw ( &self ) -> Option< f64 > {
-		if let Some(_) = &self.upgrade {
+		if self.upgrade.is_some() {
 			return Some( self.val_upgrade )
 		}
 		
@@ -217,40 +237,8 @@ impl CharStat {
 // priv
 impl CharStat {
 	fn update_current_value ( &mut self ) {
-		/*
-		let base = self.base.value();
-		let mut upgrade = 0.0;
-		let mut base_mod = 0.0;
-		let mut upgrade_mod = 0.0;
-		let mut base_plus_upgrade_mod = 0.0;
-		let mut mod_mlt = 1.0;
-		
-		if let Some( mod_mult ) = &mut self.mod_mult {
-			mod_mlt = mod_mult.get();
-		}
-		
-		if let Some( mod_base ) = &mut self.mod_of_base {
-			base_mod = mod_base.get() * mod_mlt;
-		}
-		
-		if let Some( up ) = &self.upgrade {
-			upgrade = up.value();
-			
-			if let Some( mod_up ) = &mut self.mod_of_upgrade {
-				upgrade_mod = mod_up.get() * mod_mlt;
-			}
-			
-			if let Some( mod_base_plus_up ) = &mut self.mod_of_base_plus_upgrade {
-				mod_base_plus_up.update( base + upgrade );
-				base_plus_upgrade_mod = mod_base_plus_up.get() * mod_mlt;
-			}
-		}
-		
-		self.current_value = base + upgrade + base_mod + upgrade_mod + base_plus_upgrade_mod;
-		*/
-		
 		self.current_value = self.val_base + self.val_base_mod + self.val_upgrade + self.val_upgrade_mod + self.val_base_plus_upgrade_mod;
-	}// calc_impl
+	}
 	
 	fn append_base_mod( &mut self, modifier: Modifier ) -> Result<(),()> {
 		if let Some( mod_of_base ) = &mut self.mod_of_base {
@@ -292,15 +280,15 @@ impl CharStat {
 			
 			self.val_mod_mult = mod_mult.get();
 			
-			if let Some(_) = self.mod_of_base {
+			if self.mod_of_base.is_some() {
 				self.update_base_mod();
 			}
 			
-			if let Some(_) = self.mod_of_upgrade {
+			if self.mod_of_upgrade.is_some() {
 				self.update_upgrade_mod();
 			}
 			
-			if let Some(_) = self.mod_of_base_plus_upgrade {
+			if self.mod_of_base_plus_upgrade.is_some() {
 				self.update_base_plus_upgrade_mod();
 			}
 			
@@ -337,7 +325,7 @@ impl CharStat {
 	fn update_base( &mut self ) {
 		self.val_base = self.base.value();
 		
-		if let Some(_) = self.mod_of_base {
+		if self.mod_of_base.is_some() {
 			self.update_base_mod();
 		}
 	}
@@ -352,11 +340,11 @@ impl CharStat {
 		if let Some( upgrade ) = &self.upgrade {
 			self.val_upgrade = upgrade.value();
 			
-			if let Some(_) = self.mod_of_upgrade {
+			if self.mod_of_upgrade.is_some() {
 				self.update_upgrade_mod();
 			}
 			
-			if let Some(_) = self.mod_of_base_plus_upgrade {
+			if self.mod_of_base_plus_upgrade.is_some() {
 				self.update_base_plus_upgrade_mod();
 			}
 		}
@@ -508,6 +496,7 @@ impl CharStat {
 }// CharStat - UpgradeConf
 
 impl Default for CharStat {
+	#[inline]
 	fn default() -> Self {
 		CharStat::new( BaseConf::default(), None, None, None, None, None )
 	}
@@ -569,7 +558,7 @@ pub enum CharStatMissingObject {
 }// CharStatMissingObject
 */
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive( Debug, Clone, Copy, PartialEq )]
 pub enum RoundingFunctionEnum {
 	Round,
 	RoundTiesEven,
@@ -580,7 +569,7 @@ pub enum RoundingFunctionEnum {
 }// RoundingFunction
 
 impl RoundingFunctionEnum {
-	fn do_rounding( &self, val: f64 ) -> f64 {
+	fn do_rounding( self, val: f64 ) -> f64 {
 		match self {
 			RoundingFunctionEnum::Round => val.round(),
 			RoundingFunctionEnum::RoundTiesEven => val.round_ties_even(),
@@ -592,13 +581,14 @@ impl RoundingFunctionEnum {
 	}// do_rounding
 }// RoundingFunctionEnum
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive( Debug, Clone, PartialEq )]
 pub struct RoundingHelper {
 	function: RoundingFunctionEnum,
 	precision: Option< f64 >,
 }
 
 impl RoundingHelper {
+	#[inline]
 	pub fn new ( function: RoundingFunctionEnum, mut precision: Option< f64 >, ) -> Self {
 		if let Some( val ) = &precision {
 			if val.is_nan() {
@@ -612,6 +602,7 @@ impl RoundingHelper {
 		}
 	}// new
 	
+	#[inline]
 	pub fn new_none() -> Self {
 		RoundingHelper {
 			function: RoundingFunctionEnum::None,
@@ -636,6 +627,7 @@ impl RoundingHelper {
 }// RoundingHelper
 
 impl Default for RoundingHelper {
+	#[inline]
 	fn default() -> Self {
 		RoundingHelper {
 			function: RoundingFunctionEnum::None,
@@ -692,6 +684,21 @@ mod tests {
 		assert_eq!( cs.value(), v_final + 4.0 );
 		
 	}// it_works
+	
+	#[test]
+	fn readme_example() {
+		let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
+
+		// new( value, is_mut, bounds, rounding, multiplier ) -> Option
+		let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
+
+		let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
+		let upgrade = UpgradeConf::new( 2.0, upgrade_bounds );
+
+		let example = CharStat::new_no_mod( base, upgrade );
+		
+		assert_eq!( example.value(), 12.0 )
+	}// readme_example
 	
 	#[test]
 	fn modifiers() {

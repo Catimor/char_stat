@@ -33,7 +33,7 @@ impl Bounds {
 			is_min_mut: false,
 			is_max_mut: false,
 		})
-	}// new
+	}// new_const
 	
 	pub fn new_mut ( v_min: f64, v_max: f64 ) -> Option< Self > {
 		if v_min > v_max || v_min.is_nan() || v_max.is_nan() {
@@ -46,7 +46,7 @@ impl Bounds {
 			is_min_mut: true,
 			is_max_mut: true,
 		})
-	}// new
+	}// new_mut
 	
 	pub fn set_min ( &mut self, new_val: f64 ) -> Result<(),()> {
 		if !self.is_min_mut || new_val > self.v_max || new_val.is_nan() {
@@ -86,6 +86,7 @@ impl Bounds {
 }// Bounds
 
 impl Default for Bounds {
+	#[inline]
 	fn default () -> Self {
 		Bounds{
 			v_min: 0.0,

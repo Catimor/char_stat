@@ -22,8 +22,7 @@ impl ModMultConf {
 		}
 		
 		match modifier.calc_mode() {
-			ModCalcModeEnum::Mul => return Err(()),
-			ModCalcModeEnum::Div => return Err(()),
+			ModCalcModeEnum::Mul | ModCalcModeEnum::Div => return Err(()),
 			_ => (),
 		}
 		

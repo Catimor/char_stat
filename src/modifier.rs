@@ -1,4 +1,4 @@
-#[derive(Clone, PartialEq, Debug)]
+#[derive( Debug, Clone, PartialEq )]
 pub struct Modifier {
 	value: f64,
 	exp_ts: Option< u64 >,
@@ -52,7 +52,7 @@ impl Modifier {
 	}
 }// Modifier
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive( Debug, Clone, Copy, PartialEq )]
 pub enum ModCalcModeEnum {
 	Add,
 	Sub,
@@ -61,7 +61,7 @@ pub enum ModCalcModeEnum {
 }// ModCalcModeEnum
 
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive( Debug, Clone, Copy, PartialEq )]
 pub enum ModCalcStageEnum {
 	Base,
 	//BaseMin,
