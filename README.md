@@ -1,5 +1,14 @@
+<p align="center">
+	<a href="#status">Status</a> •
+	<a href="#description">Description</a> •
+	<a href="#usage">Usage</a> •
+	<a href="#components">Components</a> •
+	<a href="#calculation-stages">Calculation Stages</a> •
+	<a href="#versioning">Versioning</a> •
+	<a href="#license">License</a> •
+</p>
 
-# CharStat ![Static Badge](https://img.shields.io/badge/CharStat_MSRV-1.72-purple) ![Static Badge](https://img.shields.io/badge/Version-0.1.0-purple)
+# CharStat ![Static Badge](https://img.shields.io/badge/CharStat_MSRV-1.72-purple) ![Static Badge](https://img.shields.io/badge/Version-0.1.1-purple)
 
 
 
