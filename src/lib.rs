@@ -1,5 +1,113 @@
 //#![allow(unused_variables)]
 //#![allow(dead_code)]
+#![warn(clippy::all)]
+#![warn(
+	clippy::cast_lossless, 
+	clippy::checked_conversions, 
+	clippy::default_trait_access, 
+	clippy::float_cmp, 
+	clippy::fn_params_excessive_bools, 
+	clippy::if_not_else,
+	clippy::ignored_unit_patterns,
+	clippy::implicit_clone,
+	clippy::inconsistent_struct_constructor,
+	clippy::index_refutable_slice,
+	clippy::inefficient_to_string,
+	clippy::items_after_statements,
+	clippy::large_types_passed_by_value,
+	clippy::manual_assert,
+	clippy::manual_let_else,
+	clippy::manual_string_new,
+	clippy::match_on_vec_items,
+	clippy::match_same_arms,
+	clippy::match_wild_err_arm,
+	clippy::match_wildcard_for_single_variants,
+	clippy::mismatching_type_param_order,
+	//clippy::missing_errors_doc,
+	clippy::missing_panics_doc,
+	//clippy::module_name_repetitions,
+	clippy::mut_mut,
+	clippy::needless_continue,
+	clippy::needless_for_each,
+	clippy::needless_pass_by_value,
+	clippy::option_option,
+	clippy::redundant_closure_for_method_calls,
+	clippy::redundant_else,
+	clippy::ref_option_ref,
+	clippy::return_self_not_must_use,
+	clippy::same_functions_in_if_condition,
+	clippy::semicolon_if_nothing_returned,
+	clippy::should_panic_without_expect,
+	clippy::similar_names,
+	clippy::single_match_else,
+	clippy::stable_sort_primitive,
+	clippy::str_split_at_newline,
+	clippy::string_add_assign,
+	clippy::struct_excessive_bools,
+	clippy::struct_field_names,
+	clippy::too_many_lines,
+	clippy::trivially_copy_pass_by_ref,
+	clippy::unicode_not_nfc,
+	clippy::uninlined_format_args,
+	clippy::unnecessary_wraps,
+	clippy::unnested_or_patterns,
+	clippy::unused_self,
+)]
+#![warn(
+	clippy::assertions_on_constants,
+	clippy::assign_op_pattern,
+	clippy::blocks_in_conditions,
+	clippy::bool_assert_comparison,
+	clippy::collapsible_else_if,
+	clippy::collapsible_if,
+	clippy::collapsible_match,
+	clippy::comparison_chain,
+	clippy::comparison_to_empty,
+	clippy::enum_variant_names,
+	clippy::field_reassign_with_default,
+	clippy::get_first,
+	clippy::implicit_saturating_add,
+	clippy::implicit_saturating_sub,
+	clippy::infallible_destructuring_match,
+	clippy::inherent_to_string,
+	clippy::is_digit_ascii_radix,
+	clippy::iter_nth,
+	clippy::iter_nth_zero,
+	clippy::len_zero,
+	clippy::let_and_return,
+	clippy::manual_is_ascii_check,
+	clippy::manual_map,
+	clippy::manual_range_contains,
+	clippy::manual_while_let_some,
+	clippy::match_overlapping_arm,
+	clippy::match_ref_pats,
+	clippy::match_result_ok,
+	clippy::needless_borrow,
+	clippy::needless_range_loop,
+	clippy::new_without_default,
+	clippy::op_ref,
+	clippy::question_mark,
+	clippy::redundant_closure,
+	clippy::redundant_field_names,
+	clippy::redundant_pattern,
+	clippy::redundant_pattern_matching,
+	clippy::redundant_static_lifetimes,
+	clippy::same_item_push,
+	clippy::self_named_constructors,
+	clippy::should_implement_trait,
+	clippy::single_char_add_str,
+	clippy::single_match,
+	clippy::to_digit_is_some,
+	clippy::trim_split_whitespace,
+	clippy::unnecessary_fallible_conversions,
+	clippy::unnecessary_fold,
+	clippy::unnecessary_lazy_evaluations,
+	clippy::unnecessary_mut_passed,
+	clippy::unnecessary_owned_empty_strings,
+	clippy::while_let_on_iterator,
+	clippy::write_literal,
+	clippy::wrong_self_convention,
+)]
 #![allow(clippy::result_unit_err)]
 // temporary, custom error types in dev
 
@@ -22,14 +130,14 @@ pub use modifier::*;
 mod mod_mgr;
 pub use mod_mgr::*;
 
-mod base_conf;
-pub use base_conf::*;
+mod base;
+pub use base::*;
 
-mod base_mult_conf;
-pub use base_mult_conf::*;
+mod base_mult;
+pub use base_mult::*;
 
-mod upgrade_conf;
-pub use upgrade_conf::*;
+mod upgrade;
+pub use upgrade::*;
 
 mod mod_mult;
 pub use mod_mult::*;
@@ -48,12 +156,11 @@ pub struct CharStat {
 	val_mod_mult: f64,
 	
 	base:											BaseConf,
-	upgrade:									Option< UpgradeConf >,
-	//mod_of_base_bounds:				Option< ModConf >,
-	mod_of_base:							Option< ModConf >,
-	mod_of_upgrade:						Option< ModConf >,
-	mod_of_base_plus_upgrade:	Option< ModConf >,
-	mod_mult:									Option< ModMultConf >,
+	upgrade:									Option< Box< UpgradeConf > >,
+	mod_of_base:							Option< Box< ModConf > >,
+	mod_of_upgrade:						Option< Box< ModConf > >,
+	mod_of_base_plus_upgrade:	Option< Box< ModConf > >,
+	mod_mult:									Option< Box< ModMultConf > >,
 }// CharStat
 
 impl CharStat {
@@ -88,6 +195,14 @@ impl CharStat {
 			mod_mult = None;
 		}
 		// end modifiers
+		
+		// pointers
+		let upgrade = upgrade.map( Box::new );
+		let mod_of_base = mod_of_base.map( Box::new );
+		let mod_of_upgrade = mod_of_upgrade.map( Box::new );
+		let mod_of_base_plus_upgrade = mod_of_base_plus_upgrade.map( Box::new );
+		let mod_mult = mod_mult.map( Box::new );
+		// end pointers
 		
 		let mut out = CharStat {
 			current_value: 0.0,
@@ -143,6 +258,8 @@ impl CharStat {
 	}// new_minimal
 	
 	pub fn new_no_mod ( base: BaseConf, upgrade: Option< UpgradeConf > ) -> Self {
+		let upgrade = upgrade.map( Box::new );
+		
 		let mut out = CharStat {
 			current_value: 0.0,
 			time_stamp: 0,
@@ -498,7 +615,7 @@ impl CharStat {
 impl Default for CharStat {
 	#[inline]
 	fn default() -> Self {
-		CharStat::new( BaseConf::default(), None, None, None, None, None )
+		CharStat::new_minimal( BaseConf::default() )
 	}
 }
 

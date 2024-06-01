@@ -156,6 +156,7 @@ impl BoundsModified {
 }// BoundsModified
 
 impl Default for BoundsModified {
+	#[inline]
 	fn default () -> Self {
 		BoundsModified::new( Bounds::default() )
 	}// new
