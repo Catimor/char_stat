@@ -1,4 +1,4 @@
-use super::{Bounds, ModCalcStageEnum, ModCalcModeEnum, Modifier};
+use super::{ Bounds, ModCalcStageEnum, ModCalcModeEnum, Modifier, CharStatError, CsLogicIssue };
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ModMultConf {
@@ -8,6 +8,7 @@ pub struct ModMultConf {
 }// ModConf
 
 impl ModMultConf {
+	#[inline]
 	pub fn new ( bounds: Bounds ) -> Self {
 		ModMultConf {
 			value: 0.0,
@@ -16,27 +17,32 @@ impl ModMultConf {
 		}
 	}// new
 	
-	pub fn append_mod ( &mut self, modifier: Modifier ) -> Result<(),()> {
-		if modifier.stage() != &ModCalcStageEnum::ModMult {
-			return Err(())
+	#[inline]
+	pub fn append_mod ( &mut self, modifier: Modifier ) -> Result<(), CharStatError> {
+		let stage = modifier.stage();
+		let mode = modifier.calc_mode();
+		
+		if stage != &ModCalcStageEnum::ModMult {
+			return Err( CsLogicIssue::InvalidModifierStage( *stage ) )?
 		}
 		
-		match modifier.calc_mode() {
-			ModCalcModeEnum::Mul | ModCalcModeEnum::Div => return Err(()),
-			_ => (),
+		if let ModCalcModeEnum::Mul | ModCalcModeEnum::Div = mode {
+			return Err( CsLogicIssue::InvalidModifierMode( *mode ) )?
 		}
 		
 		self.mod_vec.push( modifier );
 		self.update();
 		
 		Ok(())
-	}
+	}// append_mod
 	
+	#[inline]
 	pub(crate) fn append_mod_unchecked ( &mut self, modifier: Modifier ) {
 		self.mod_vec.push( modifier );
 		self.update();
 	}
 	
+	#[inline]
 	pub(crate) fn update ( &mut self ) {
 		let mut tmp = 0.0;
 		
@@ -52,10 +58,12 @@ impl ModMultConf {
 		self.value += 1.0;// +1 cause it's a mult, here due to bounds check
 	}// update
 	
+	#[inline]
 	pub fn get ( &self ) -> f64 {
 		self.value
 	}
 	
+	#[inline]
 	pub fn remove_expired ( &mut self, ts: u64 ) {
 		for i in ( 0..self.mod_vec.len() ).rev() {
 			let tmp = self.mod_vec.get( i );
@@ -71,30 +79,36 @@ impl ModMultConf {
 
 // bounds
 impl ModMultConf {
-	pub fn set_bounds_min ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_bounds_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.bounds.set_min( new_val )?;
 		
 		Ok(())
 	}// set_min
 	
-	pub fn set_bounds_max ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_bounds_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.bounds.set_max( new_val )?;
 		
 		Ok(())
 	}// set_max
 	
+	#[inline]
 	pub fn set_bounds_min_const ( &mut self ) {
 		self.bounds.set_min_const();
 	}
 	
+	#[inline]
 	pub fn set_bounds_max_const ( &mut self ) {
 		self.bounds.set_max_const();
 	}
 	
+	#[inline]
 	pub fn bounds_min ( &self ) -> f64 {
 		self.bounds.min()
 	}
 	
+	#[inline]
 	pub fn bounds_max ( &self ) -> f64 {
 		self.bounds.max()
 	}

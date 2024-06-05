@@ -1,3 +1,6 @@
+use std::fmt::Display;
+use crate::{ CharStatError, CsLogicIssue, CsInvalidValue };
+
 #[derive( Debug, Clone, PartialEq )]
 pub struct Modifier {
 	value: f64,
@@ -8,17 +11,21 @@ pub struct Modifier {
 }// Modifier
 
 impl Modifier {
-	pub fn new ( value: f64, exp_ts: Option< u64 >, mut mode: ModCalcModeEnum, stage: ModCalcStageEnum, ) -> Option< Self > {
+	#[inline]
+	pub fn new ( value: f64, exp_ts: Option< u64 >, mode: ModCalcModeEnum, stage: ModCalcStageEnum, ) -> Result< Self, CharStatError > {
 		if value.is_nan() {
 			
-			return None
+			return Err( CsInvalidValue::Nan( "value".to_string() ) )?
 		}
 		
-		if let ModCalcStageEnum::ModMult = stage {
-			mode = ModCalcModeEnum::Add;
+		if ModCalcStageEnum::ModMult == stage {
+			if let ModCalcModeEnum::Mul | ModCalcModeEnum::Div = mode {
+				
+				return Err( CsLogicIssue::InvalidModifierMode( mode ) )?
+			}
 		}
 		
-		Some( Modifier {
+		Ok( Modifier {
 			value,
 			exp_ts,
 			
@@ -27,6 +34,7 @@ impl Modifier {
 		})
 	}// new
 	
+	#[inline]
 	pub fn has_expired ( &self, ts: u64 ) -> bool {
 		if let Some( exp_ts ) = self.exp_ts {
 			return ts >= exp_ts
@@ -35,24 +43,29 @@ impl Modifier {
 		false
 	}
 	
+	#[inline]
 	pub fn value ( &self ) -> f64 {
 		self.value
 	}
 	
+	#[inline]
 	pub fn expiration_ts ( &self ) -> Option< u64 > {
 		self.exp_ts
 	}
 	
+	#[inline]
 	pub fn calc_mode ( &self ) -> &ModCalcModeEnum {
 		&self.mode
 	}
 	
+	#[inline]
 	pub fn stage ( &self ) -> &ModCalcStageEnum {
 		&self.stage
 	}
 }// Modifier
 
-#[derive( Debug, Clone, Copy, PartialEq )]
+//----------------------------------------------------
+#[derive( Debug, Clone, Copy, PartialEq, Eq )]
 pub enum ModCalcModeEnum {
 	Add,
 	Sub,
@@ -60,17 +73,48 @@ pub enum ModCalcModeEnum {
 	Div,
 }// ModCalcModeEnum
 
+impl Display for ModCalcModeEnum {
+	#[inline]
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut tmp = String::from( "missing object: " );
+		
+		tmp.push_str( match self {
+			Self::Add => "Add",
+			Self::Sub => "Sub",
+			Self::Mul => "Mul",
+			Self::Div => "Div",
+		} );
+		
+		tmp.fmt(f)
+	}
+}// ModCalcStageEnum - Display
 
-#[derive( Debug, Clone, Copy, PartialEq )]
+//----------------------------------------------------
+#[derive( Debug, Clone, Copy, PartialEq, Eq )]
 pub enum ModCalcStageEnum {
 	Base,
-	//BaseMin,
-	//BaseMax,
 	Upgrade,
 	BasePlusUpgrade,
 	ModMult,
 }// ModCalcStageEnum
-	
+
+impl Display for ModCalcStageEnum {
+	#[inline]
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut tmp = String::from( "missing object: " );
+		
+		tmp.push_str( match self {
+			Self::Base => "Base",
+			Self::Upgrade => "Upgrade",
+			Self::BasePlusUpgrade => "BasePlusUpgrade",
+			Self::ModMult => "ModMult",
+		} );
+		
+		tmp.fmt(f)
+	}
+}// ModCalcStageEnum - Display
+
+//----------------------------------------------------
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -91,6 +135,7 @@ mod tests {
 	#[test]
 	fn nan_handling() {
 		let modif = Modifier::new( f64::NAN, None, ModCalcModeEnum::Mul, ModCalcStageEnum::Base );
-		assert_eq!( modif, None );
+		let expected: CharStatError = CsInvalidValue::Nan( "value".to_string() ).into();
+		assert_eq!( modif, Err( expected ) );
 	}// nan_handling
 }
