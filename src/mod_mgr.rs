@@ -1,4 +1,4 @@
-use super::{ Bounds, RoundingHelper, ModCalcModeEnum, ModCalcStageEnum, Modifier, CharStatError, CsLogicIssue };
+use crate::{ Bounds, RoundingHelper, ModCalcModeEnum, ModCalcStageEnum, Modifier, CharStatError, CsLogicIssue, CsInvalidValue };
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ModConf {
@@ -29,7 +29,10 @@ impl ModConf {
 	pub fn append_mod ( &mut self, value: f64, modifier: Modifier ) -> Result<(), CharStatError > {
 		let stage = modifier.stage();
 		if stage != &self.stage {
-			return Err( CsLogicIssue::InvalidModifierStage( *stage ) )?
+			return Err( CsLogicIssue::InvalidModifierStage( *stage ).into() )
+		}
+		if value.is_nan() {
+			return Err( CsInvalidValue::Nan( "value".to_string() ).into() )
 		}
 		
 		self.mod_vec.push( modifier );
@@ -104,6 +107,33 @@ impl ModConf {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	
+	#[test]
+	fn basic_functional() {
+		// bounds are applied to the sum of modifiers' values, therefore the minimum bound must be <= 0.0, bacause the modifier list will start empty.
+		let bounds_mgr = Bounds::new_const( 0.0, 1.0 ).unwrap();
+		let mut mod_mgr = ModConf::new( ModCalcStageEnum::Base, bounds_mgr, RoundingHelper::new_none(), false, false );
+		
+		let modifier = Modifier::new( 1.0, None, ModCalcModeEnum::Add, ModCalcStageEnum::Base ).unwrap();
+		let base_value = 69.0;
+		assert_eq!( mod_mgr.get(), 0.0 );
+		
+		mod_mgr.append_mod( base_value, modifier ).unwrap();
+		assert_eq!( mod_mgr.get(), 1.0 );
+	}// basic_functional
+	
+	#[test]
+	fn nan_handling() {
+		let bounds_mgr = Bounds::new_const( 0.0, 1.0 ).unwrap();
+		let mut mod_mgr = ModConf::new( ModCalcStageEnum::Base, bounds_mgr, RoundingHelper::new_none(), false, false );
+		
+		let modifier = Modifier::new( 1.0, None, ModCalcModeEnum::Add, ModCalcStageEnum::Base ).unwrap();
+		
+		let base_value = f64::NAN;
+		let expected = CsInvalidValue::Nan( "value".to_string() ).into();
+		
+		assert_eq!( mod_mgr.append_mod( base_value, modifier ), Err( expected ) );
+	}// basic_functional
 	
 	#[test]
 	fn expired_modifiers() {

@@ -126,12 +126,12 @@
 //! use char_stat::{ CharStat, BaseConf, UpgradeConf, Bounds, RoundingHelper };
 //! 
 //! // new_const( min, max ) -> Result< Bounds, CharStatError >
-//! let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
+//! let base_bounds = Bounds::new_const( 4.0, 20.0 ).unwrap();
 //! 
 //! // new( value, is_mut, bounds, rounding, multiplier ) -> Result
-//! let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
+//! let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).unwrap();
 //! 
-//! let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
+//! let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).unwrap();
 //! 
 //! // new( value, bounds ) -> Result
 //! let upgrade = UpgradeConf::new( 2.0, upgrade_bounds ).unwrap();
@@ -897,24 +897,6 @@ mod char_stat_tests {
 		assert_eq!( cs.value(), v_final + 4.0 );
 		
 	}// basic_functional
-	
-	#[test]
-	fn readme_example() {
-		// new_const( min, max ) -> Result< Bounds, CharStatError >
-		let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
-		
-		// new( value, is_mut, bounds, rounding, multiplier ) -> Result
-		let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
-		
-		let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
-		
-		// new( value, bounds ) -> Result
-		let upgrade = UpgradeConf::new( 2.0, upgrade_bounds ).unwrap();
-		
-		let example = CharStat::new_no_mod( base, Some( upgrade ) );
-		
-		assert_eq!( example.value(), 12.0 )
-	}// readme_example
 	
 	#[test]
 	fn modifiers() {

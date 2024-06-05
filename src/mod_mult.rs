@@ -11,7 +11,7 @@ impl ModMultConf {
 	#[inline]
 	pub fn new ( bounds: Bounds ) -> Self {
 		ModMultConf {
-			value: 0.0,
+			value: 1.0,
 			bounds,
 			mod_vec: Vec::new(),
 		}
@@ -30,8 +30,7 @@ impl ModMultConf {
 			return Err( CsLogicIssue::InvalidModifierMode( *mode ) )?
 		}
 		
-		self.mod_vec.push( modifier );
-		self.update();
+		self.append_mod_unchecked( modifier );
 		
 		Ok(())
 	}// append_mod
@@ -74,6 +73,8 @@ impl ModMultConf {
 				}
 			}
 		}// for
+		
+		self.update();
 	}// remove_expired
 }// ModUpgradeConf
 
@@ -114,3 +115,26 @@ impl ModMultConf {
 	}
 }// ModMultConf.bounds: Bounds
 
+#[cfg(test)]
+mod tests {
+	use crate::{ Bounds, Modifier };
+	use super::*;
+	
+	#[test]
+	fn basic_functional() {
+		// bounds are applied to the sum of modifiers' values, therefore the minimum bound must be <= 0.0, bacause the modifier list will start empty.
+		let bounds_mlt = Bounds::new_const( 0.0, 1.0 ).unwrap();
+		let mut mod_mult = ModMultConf::new( bounds_mlt );
+		
+		let modifier = Modifier::new( 1.0, Some( 9 ), ModCalcModeEnum::Add, ModCalcStageEnum::ModMult ).unwrap();
+		
+		// the returned value is incremented by 1.0 to turn it into multiplier
+		assert_eq!( mod_mult.get(), 1.0 );
+		
+		mod_mult.append_mod( modifier ).unwrap();
+		assert_eq!( mod_mult.get(), 2.0 );
+		
+		mod_mult.remove_expired( 100 );
+		assert_eq!( mod_mult.get(), 1.0 );
+	}// basic_functional
+}
