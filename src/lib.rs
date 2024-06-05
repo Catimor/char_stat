@@ -52,6 +52,7 @@
 	clippy::unnecessary_wraps,
 	clippy::unnested_or_patterns,
 	clippy::unused_self,
+	clippy::missing_inline_in_public_items,
 )]
 #![warn(
 	clippy::assertions_on_constants,
@@ -108,15 +109,38 @@
 	clippy::write_literal,
 	clippy::wrong_self_convention,
 )]
-#![allow(clippy::result_unit_err)]
-// temporary, custom error types in dev
 
 //! # CharStat
 //! 
+//! A simple game dev library for handling character statistics.
+//! 
 //! ## Features
 //! 
-//! [x] Modifiers
-//! [ ] Error handling
+//! [x] Modifiers<br>
+//! [x] Custom error types<br>
+//! [ ] Documentation<br>
+//! [ ] Stackable Modifiers<br>
+//! 
+//! # Examples
+//! ```rust
+//! use char_stat::{ CharStat, BaseConf, UpgradeConf, Bounds, RoundingHelper };
+//! 
+//! // new_const( min, max ) -> Result< Bounds, CharStatError >
+//! let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
+//! 
+//! // new( value, is_mut, bounds, rounding, multiplier ) -> Result
+//! let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
+//! 
+//! let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
+//! 
+//! // new( value, bounds ) -> Result
+//! let upgrade = UpgradeConf::new( 2.0, upgrade_bounds ).unwrap();
+//! 
+//! let example = CharStat::new_no_mod( base, Some( upgrade ) );
+//! 
+//! assert_eq!( example.value(), 12.0 )
+//! ```
+//! 
 
 //pub mod builder;
 //use builder::*;
@@ -142,6 +166,9 @@ pub use upgrade::*;
 mod mod_mult;
 pub use mod_mult::*;
 
+mod errors;
+pub use errors::*;
+
 
 #[derive( Debug, Clone, PartialEq )]
 pub struct CharStat {
@@ -164,6 +191,7 @@ pub struct CharStat {
 }// CharStat
 
 impl CharStat {
+	#[inline]
 	pub fn new (
 		base: BaseConf, 
 		upgrade: Option< UpgradeConf >, 
@@ -230,6 +258,7 @@ impl CharStat {
 		out
 	}// new
 	
+	#[inline]
 	pub fn new_minimal ( base: BaseConf ) -> Self {
 		let mut out = CharStat {
 			current_value: 0.0,
@@ -257,6 +286,7 @@ impl CharStat {
 		out
 	}// new_minimal
 	
+	#[inline]
 	pub fn new_no_mod ( base: BaseConf, upgrade: Option< UpgradeConf > ) -> Self {
 		let upgrade = upgrade.map( Box::new );
 		
@@ -286,13 +316,35 @@ impl CharStat {
 		out
 	}// new_no_mod
 	
+	/// returns the current value
+	#[inline]
 	pub fn value ( &self ) -> f64 {
 		self.current_value
 	}
 	
-	pub fn set_ts( &mut self, new_val: u64 ) -> Result<(),()> {
+	/// Sets the timestamp and checks for expired modifiers.
+	/// 
+	/// # Examples
+	/// ```rust
+	/// use char_stat::{ CharStat, BaseConf, CharStatError, CsLogicIssue };
+	/// 
+	/// // example uses `new_minimal` for the sake of brevity
+	/// // new_minimal and new_no_mod does not allow any modifiers so setting TS will be useless
+	/// let mut cs = CharStat::new_minimal( BaseConf::default() );
+	/// assert_eq!( cs.set_ts( 100 ), Ok(()) );
+	/// 
+	/// // check for "time travel"
+	/// let err = Err( CsLogicIssue::TimeTravel.into() );
+	/// assert_eq!( cs.set_ts( 0 ), err );
+	/// ```
+	/// 
+	/// # Errors
+	/// if old TS is greater than the new<br>
+	/// `CharStatError::LogicIssue( CsLogicIssue::TimeTravel )`
+	#[inline]
+	pub fn set_ts( &mut self, new_val: u64 ) -> Result<(), CharStatError > {
 		if new_val < self.time_stamp {
-			return Err(())
+			return Err( CsLogicIssue::TimeTravel.into() )
 		}
 		
 		self.time_stamp = new_val;
@@ -302,26 +354,63 @@ impl CharStat {
 		Ok(())
 	}
 	
+	/// Sets the timestamp and checks for expired modifiers. Performs no checks agains new TS being lower (earlier) than the current
+	/// 
+	/// # Examples
+	/// ```rust
+	/// use char_stat::{ CharStat, BaseConf };
+	/// 
+	/// // example uses `new_minimal` for the sake of brevity
+	/// // new_minimal and new_no_mod does not allow any modifiers so setting TS will be useless
+	/// let mut cs = CharStat::new_minimal( BaseConf::default() );
+	/// cs.set_ts( 100 );
+	/// cs.set_ts( 0 );
+	/// ```
+	#[inline]
 	pub fn set_ts_unchecked( &mut self, new_val: u64 ) {
 		self.time_stamp = new_val;
 		
 		self.remove_expired_modifiers();
 	}
 	
-	pub fn new_modifier( &mut self, modifier: Modifier ) -> Result<(),()> {
+	/// Appends modifier to list of active modifiers. Each ModConf maintains its own list (Vec) of active modifiers. This method will dispatch modifiers
+	/// based on output from `modifier.stage()`. If CharStat is not configured with appropriate ModConf then an error will be returned
+	/// 
+	/// # Examples
+	/// ```rust
+	/// use char_stat::{ CharStat, BaseConf, ModConf, Modifier, ModCalcModeEnum, ModCalcStageEnum, Bounds, RoundingHelper };
+	/// 
+	/// let bounds_base = Bounds::default();
+	/// let bounds_mod_base = Bounds::new_const( 0.0, 1.0 ).unwrap();
+	///
+	/// let base = BaseConf::new( 0.5, false, bounds_base, RoundingHelper::new_none(), None ).unwrap();
+	/// let mod_conf = Some( ModConf::new( ModCalcStageEnum::Base, bounds_mod_base, RoundingHelper::new_none(), false, false ) );
+	/// // mods' value of 1.0 --> + 100%
+	/// let mod_base = Modifier::new( 1.0, Some( 24 ), ModCalcModeEnum::Mul, ModCalcStageEnum::Base ).unwrap();
+	///
+	/// let mut cs = CharStat::new( base, None, mod_conf, None, None, None );
+	/// assert_eq!( cs.append_modifier( mod_base ), Ok(()) );
+	/// assert_eq!( cs.value(), 1.0 );
+	/// ```
+	/// 
+	/// # Errors
+	/// When trying to append modifier to list of non-existend ModConf<br>
+	/// `CharStatError::MissingComponent( CsMissingComponent )`
+	#[inline]
+	pub fn append_modifier( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		match &modifier.stage() {
-			ModCalcStageEnum::Base => self.append_base_mod( modifier ),//self.mod_of_base_minmax.push( modifier ),
-			//ModCalcStageEnum::BaseMin => todo!(),//self.base_min.push( modifier ),
-			//ModCalcStageEnum::BaseMax => todo!(),//self.base_max.push( modifier ),
+			ModCalcStageEnum::Base => self.append_base_mod( modifier ),
 			ModCalcStageEnum::Upgrade => self.append_upgrade_mod( modifier ),
-			ModCalcStageEnum::BasePlusUpgrade => self.append_base_plus_upgrade_mod( modifier ),//self.base_plus_upgrade.push( modifier ),
-			ModCalcStageEnum::ModMult => self.append_modmult( modifier ),//self.mod_mult.push( modifier ),
+			ModCalcStageEnum::BasePlusUpgrade => self.append_base_plus_upgrade_mod( modifier ),
+			ModCalcStageEnum::ModMult => self.append_modmult( modifier ),
 		}?;
 		
 		self.update_current_value();
 		Ok(())
 	}
 	
+	/// returns the value of base with multiplier and modifiers applied
+	#[inline]
 	pub fn base ( &self ) -> f64 {
 		if self.mod_of_base.is_some() {
 			return self.val_base + self.val_base_mod
@@ -329,26 +418,39 @@ impl CharStat {
 		self.val_base
 	}
 	
+	/// returns the "raw" value of base with multiplier but not modifiers
+	#[inline]
 	pub fn base_raw ( &self ) -> f64 {
 		self.val_base
 	}
 	
-	pub fn upgrade ( &self ) -> Option< f64 > {
+	/// returns the value of upgrade with modifiers applied.
+	/// 
+	/// # Errors
+	/// When CharStat is declared without UpgradeConf<br>
+	/// `CharStatError::MissingComponent( CsMissingComponent::Upgrade )`
+	#[inline]
+	pub fn upgrade ( &self ) -> Result< f64, CharStatError > {
 		match ( &self.upgrade, &self.mod_of_upgrade ) {
-			( Some(_), Some(_) ) => Some( self.val_upgrade + self.val_upgrade_mod ),
-			( Some(_), None ) => Some( self.val_upgrade ),
-			( _, _ ) => None,
+			( Some(_), Some(_) ) => Ok( self.val_upgrade + self.val_upgrade_mod ),
+			( Some(_), None ) => Ok( self.val_upgrade ),
+			( _, _ ) => Err( CsMissingComponent::Upgrade.into() ),
 		}
 	}
 	
-	pub fn upgrade_raw ( &self ) -> Option< f64 > {
+	/// returns the "raw" value of upgrade without modifiers.
+	/// 
+	/// # Errors
+	/// When CharStat is declared without UpgradeConf<br>
+	/// `CharStatError::MissingComponent( CsMissingComponent::Upgrade )`
+	#[inline]
+	pub fn upgrade_raw ( &self ) -> Result< f64, CharStatError > {
 		if self.upgrade.is_some() {
-			return Some( self.val_upgrade )
+			return Ok( self.val_upgrade )
 		}
 		
-		None
+		Err( CsMissingComponent::Upgrade.into() )
 	}
-	
 }// CharStat - pub
 
 // priv
@@ -357,7 +459,7 @@ impl CharStat {
 		self.current_value = self.val_base + self.val_base_mod + self.val_upgrade + self.val_upgrade_mod + self.val_base_plus_upgrade_mod;
 	}
 	
-	fn append_base_mod( &mut self, modifier: Modifier ) -> Result<(),()> {
+	fn append_base_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( mod_of_base ) = &mut self.mod_of_base {
 			mod_of_base.append_mod_unchecked( self.base.value(), modifier );
 			self.update_base_mod();
@@ -365,10 +467,10 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::ModOfBase.into() )
 	}
 	
-	fn append_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(),()> {
+	fn append_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let ( Some( mod_of_upgrade ), Some( upgrade ) ) = ( &mut self.mod_of_upgrade, &mut self.upgrade ) {
 			mod_of_upgrade.append_mod_unchecked( upgrade.value(), modifier );
 			self.update_upgrade_mod();
@@ -376,10 +478,10 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::ModOfUpgrade.into() )
 	}
 	
-	fn append_base_plus_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(),()> {
+	fn append_base_plus_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( tmp ) = &mut self.mod_of_base_plus_upgrade {
 			let val = self.val_base + self.val_upgrade;
 			tmp.append_mod_unchecked( val, modifier );
@@ -388,10 +490,10 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::ModOfBasePlusUpgrade.into() )
 	}
 	
-	fn append_modmult( &mut self, modifier: Modifier ) -> Result<(),()> {
+	fn append_modmult( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( mod_mult ) = &mut self.mod_mult {
 			mod_mult.append_mod_unchecked( modifier );
 			
@@ -412,7 +514,7 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::ModMult.into() )
 	}// append_modmult
 	
 	fn remove_expired_modifiers( &mut self ) {
@@ -445,10 +547,11 @@ impl CharStat {
 		if self.mod_of_base.is_some() {
 			self.update_base_mod();
 		}
-	}
+	}// update_base
 	
 	fn update_base_mod( &mut self ) {
-		if let Some( mod_mgr ) = &self.mod_of_base {
+		if let Some( mod_mgr ) = &mut self.mod_of_base {
+			mod_mgr.update( self.val_base );
 			self.val_base_mod = mod_mgr.get() * self.val_mod_mult;
 		}
 	}
@@ -468,20 +571,24 @@ impl CharStat {
 	}// update_upgrade
 	
 	fn update_upgrade_mod( &mut self ) {
-		if let Some( mod_mgr ) = &self.mod_of_upgrade {
+		if let Some( mod_mgr ) = &mut self.mod_of_upgrade {
+			mod_mgr.update( self.val_upgrade );
 			self.val_upgrade_mod = mod_mgr.get() * self.val_mod_mult;
 		}
 	}
 	
 	fn update_base_plus_upgrade_mod( &mut self ) {
-		if let Some( mod_mgr ) = &self.mod_of_base_plus_upgrade {
+		if let Some( mod_mgr ) = &mut self.mod_of_base_plus_upgrade {
+			mod_mgr.update( self.val_base + self.val_upgrade );
 			self.val_base_plus_upgrade_mod = mod_mgr.get() * self.val_mod_mult;
 		}
 	}
 }// CharStat - priv
 
+/// Methods for manipulation of BaseConf
 impl CharStat {
-	pub fn set_base_value ( &mut self, value: f64 ) -> Result<(), ()> {
+	#[inline]
+	pub fn set_base_value ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		self.base.set_value( value )?;
 		self.update_base();
 		self.update_current_value();
@@ -489,7 +596,8 @@ impl CharStat {
 		Ok(())
 	}
 	
-	pub fn set_base_value_clamping ( &mut self, value: f64 ) -> Result<(), ()> {
+	#[inline]
+	pub fn set_base_value_clamping ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		self.base.set_value_clamping( value )?;
 		self.update_base();
 		self.update_current_value();
@@ -497,41 +605,76 @@ impl CharStat {
 		Ok(())
 	}
 	
+	#[inline]
 	pub fn set_base_value_const ( &mut self ) {
 		self.base.set_value_const();
 	}
 	
-	pub fn set_base_bounds_min ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_base_bounds_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.base.set_bounds_min( new_val )?;
 		
 		Ok(())
 	}
 	
-	pub fn set_base_bounds_max ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_base_bounds_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.base.set_bounds_max( new_val )?;
 		
 		Ok(())
 	}
 	
+	#[inline]
 	pub fn set_base_bounds_min_const ( &mut self ) {
 		self.base.set_bounds_min_const();
 	}
 	
+	#[inline]
 	pub fn set_base_bounds_max_const ( &mut self ) {
 		self.base.set_bounds_max_const();
 	}
 	
+	#[inline]
 	pub fn base_bounds_min ( &self ) -> f64 {
 		self.base.bounds_min()
 	}
 	
+	#[inline]
 	pub fn base_bounds_max ( &self ) -> f64 {
 		self.base.bounds_max()
 	}
 }// CharStat - BaseConf
 
+/// Methods for manipulation of UpgradeConf
 impl CharStat {
-	pub fn set_upgrade_value ( &mut self, value: f64 ) -> Result<(), ()> {
+	#[inline]
+	pub fn inc_upgrade_value ( &mut self, value: f64 ) -> Result<(), CharStatError > {
+		if let Some( upgrade ) = &mut self.upgrade {
+			upgrade.set_value( upgrade.value() + value )?;
+			self.update_upgrade();
+			self.update_current_value();
+			
+			return Ok(())
+		}
+		
+		Err( CsMissingComponent::Upgrade.into() )
+	}
+	
+	#[inline]
+	pub fn dec_upgrade_value ( &mut self, value: f64 ) -> Result<(), CharStatError > {
+		if let Some( upgrade ) = &mut self.upgrade {
+			upgrade.set_value( upgrade.value() - value )?;
+			self.update_upgrade();
+			self.update_current_value();
+			
+			return Ok(())
+		}
+		
+		Err( CsMissingComponent::Upgrade.into() )
+	}
+	
+	#[inline]
+	pub fn set_upgrade_value ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_value( value )?;
 			self.update_upgrade();
@@ -540,10 +683,11 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
-	pub fn set_upgrade_value_clamping ( &mut self, value: f64 ) -> Result<(), ()> {
+	#[inline]
+	pub fn set_upgrade_value_clamping ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_value_clamping( value )?;
 			self.update_upgrade();
@@ -552,49 +696,54 @@ impl CharStat {
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
-	pub fn set_upgrade_bounds_min ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_upgrade_bounds_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_bounds_min( new_val )?;
 			
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
-	pub fn set_upgrade_bounds_max ( &mut self, new_val: f64 ) -> Result<(),()> {
+	#[inline]
+	pub fn set_upgrade_bounds_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_bounds_max( new_val )?;
 			
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
-	pub fn set_upgrade_bounds_min_const ( &mut self ) -> Result<(),()> {
+	#[inline]
+	pub fn set_upgrade_bounds_min_const ( &mut self ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_bounds_min_const();
 			
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
-	pub fn set_upgrade_bounds_max_const ( &mut self ) -> Result<(),()> {
+	#[inline]
+	pub fn set_upgrade_bounds_max_const ( &mut self ) -> Result<(), CharStatError > {
 		if let Some( upgrade ) = &mut self.upgrade {
 			upgrade.set_bounds_max_const();
 			
 			return Ok(())
 		}
 		
-		Err(())
+		Err( CsMissingComponent::Upgrade.into() )
 	}
 	
+	#[inline]
 	pub fn upgrade_bounds_min ( &self ) -> Option< f64 > {
 		if let Some( upgrade ) = &self.upgrade {
 			return Some( upgrade.bounds_min() )
@@ -603,6 +752,7 @@ impl CharStat {
 		None
 	}
 	
+	#[inline]
 	pub fn upgrade_bounds_max ( &self ) -> Option< f64 > {
 		if let Some( upgrade ) = &self.upgrade {
 			return Some( upgrade.bounds_max() )
@@ -618,62 +768,6 @@ impl Default for CharStat {
 		CharStat::new_minimal( BaseConf::default() )
 	}
 }
-
-/*
-#[derive(Clone, Eq, PartialEq)]
-pub enum CharStatError {
-	LogicIssue( CharStatLogicIssue ),
-	InvalidValue( CharStatInvalidValue ),
-	MissingObject( CharStatMissingObject ),
-	Other,
-}// CharStatError
-
-impl From< CharStatLogicIssue > for CharStatError {
-	fn from( value: CharStatLogicIssue ) -> Self {
-		CharStatError::LogicIssue( value )
-	}
-}// from LogicIssue
-
-impl From< CharStatInvalidValue > for CharStatError {
-	fn from( value: CharStatInvalidValue ) -> Self {
-		CharStatError::InvalidValue( value )
-	}
-}// from InvalidValue
-
-impl From< CharStatMissingObject > for CharStatError {
-	fn from( value: CharStatMissingObject ) -> Self {
-		CharStatError::MissingObject( value )
-	}
-}// from MissingObject
-
-impl Default for CharStatError {
-	fn default() -> Self {
-		CharStatError::Other
-	}
-}// from MissingObject
-
-#[derive(Clone, Eq, PartialEq)]
-pub enum CharStatLogicIssue {
-	MinGreaterThanMax,
-	ValueIsImmutable,
-}// CharStatLogicIssue
-
-#[derive(Clone, Eq, PartialEq)]
-pub enum CharStatInvalidValue {
-	ValueBelowMinimum,
-	ValueAboveMaximum,
-	ValueIsNan,
-}// CharStatInvalidValue
-
-#[derive(Clone, Eq, PartialEq)]
-pub enum CharStatMissingObject {
-	Upgrade,
-	ModOfBase,
-	ModOfUpgrade,
-	ModOfBasePlusUpgrade,
-	ModMult,
-}// CharStatMissingObject
-*/
 
 #[derive( Debug, Clone, Copy, PartialEq )]
 pub enum RoundingFunctionEnum {
@@ -754,7 +848,7 @@ impl Default for RoundingHelper {
 }
 
 #[cfg(test)]
-mod tests {
+mod char_stat_tests {
 	use super::*;
 	// unwrap because hardcoded values have been checked manually.
 	
@@ -770,10 +864,10 @@ mod tests {
 		let bounds_mult_b = Bounds::new_const( 0.5, 1.5 ).unwrap();
 		let bounds_mult_e = Bounds::new_mut( 1.0, 2.0 ).unwrap();
 		let ronud_helper = RoundingHelper::new( RoundingFunctionEnum::Round, Some( 0.1 ) );
-		let mult = BaseMultConf::new( v_mult_b, v_mult_e, bounds_mult_b, bounds_mult_e, ronud_helper );
+		let mult = BaseMultConf::new( v_mult_b, v_mult_e, bounds_mult_b, bounds_mult_e, ronud_helper ).unwrap();
 		
 		let bounds_base = Bounds::new_const( 4.0, 20.0 ).unwrap();
-		let base = BaseConf::new( v_base, true, bounds_base, RoundingHelper::default(), mult ).unwrap();
+		let base = BaseConf::new( v_base, true, bounds_base, RoundingHelper::default(), Some( mult ) ).unwrap();
 		
 		let bounds_up_mod = Bounds::new_const( -0.5, 1.5 ).unwrap();
 		let rounding = RoundingHelper::new( RoundingFunctionEnum::None, None );
@@ -783,7 +877,9 @@ mod tests {
 		let mut upgrade = UpgradeConf::new( 0.0, bounds_upgr ).unwrap();
 		
 		assert_eq!( base.value(), v_base_plus_mlt );
-		assert_eq!( upgrade.set_value( 69.0 ), Err(()) );
+		
+		let expected: CharStatError = CsInvalidValue::AboveMaximum( "value".to_string() ).into();
+		assert_eq!( upgrade.set_value( 69.0 ), Err( expected ) );
 		assert_eq!( upgrade.value(), 0.0 );
 		
 		assert_eq!( upgrade.set_value( v_upgrade ), Ok(()) );
@@ -792,27 +888,30 @@ mod tests {
 		assert_eq!( cs.value(), v_final );
 		
 		assert_eq!( cs.set_upgrade_value( v_upgrade + 2.0 ), Ok(()) );
-		assert_eq!( cs.upgrade_raw(), Some( v_upgrade + 2.0 ) );
+		assert_eq!( cs.upgrade_raw(), Ok( v_upgrade + 2.0 ) );
 		
 		assert_eq!( cs.value(), v_final + 2.0 );
 		
 		let modifier = Modifier::new( 0.5, None, ModCalcModeEnum::Mul, ModCalcStageEnum::Upgrade ).unwrap();
-		assert_eq!( cs.new_modifier( modifier ), Ok(()) );
+		assert_eq!( cs.append_modifier( modifier ), Ok(()) );
 		assert_eq!( cs.value(), v_final + 4.0 );
 		
-	}// it_works
+	}// basic_functional
 	
 	#[test]
 	fn readme_example() {
+		// new_const( min, max ) -> Result< Bounds, CharStatError >
 		let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
-
-		// new( value, is_mut, bounds, rounding, multiplier ) -> Option
+		
+		// new( value, is_mut, bounds, rounding, multiplier ) -> Result
 		let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
-
+		
 		let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
-		let upgrade = UpgradeConf::new( 2.0, upgrade_bounds );
-
-		let example = CharStat::new_no_mod( base, upgrade );
+		
+		// new( value, bounds ) -> Result
+		let upgrade = UpgradeConf::new( 2.0, upgrade_bounds ).unwrap();
+		
+		let example = CharStat::new_no_mod( base, Some( upgrade ) );
 		
 		assert_eq!( example.value(), 12.0 )
 	}// readme_example
@@ -827,10 +926,10 @@ mod tests {
 		let v_base_and_up_mod = 0.05;
 		let v_mod_mult = 1.0;
 		
-		let mod_base = Modifier::new( v_base_mod, None, ModCalcModeEnum::Mul, ModCalcStageEnum::Base ).unwrap();
-		let mod_upgrade = Modifier::new( v_upgrade_mod, None, ModCalcModeEnum::Mul, ModCalcStageEnum::Upgrade ).unwrap();
-		let mod_base_and_up = Modifier::new( v_base_and_up_mod, None, ModCalcModeEnum::Mul, ModCalcStageEnum::BasePlusUpgrade ).unwrap();
-		let mod_mod_mlt = Modifier::new( v_mod_mult, None, ModCalcModeEnum::Add, ModCalcStageEnum::ModMult ).unwrap();
+		let mod_base = Modifier::new( v_base_mod, Some( 24 ), ModCalcModeEnum::Mul, ModCalcStageEnum::Base ).unwrap();
+		let mod_upgrade = Modifier::new( v_upgrade_mod, Some( 49 ), ModCalcModeEnum::Mul, ModCalcStageEnum::Upgrade ).unwrap();
+		let mod_base_and_up = Modifier::new( v_base_and_up_mod, Some( 74 ), ModCalcModeEnum::Mul, ModCalcStageEnum::BasePlusUpgrade ).unwrap();
+		let mod_mod_mlt = Modifier::new( v_mod_mult, Some( 99 ), ModCalcModeEnum::Add, ModCalcStageEnum::ModMult ).unwrap();
 		
 		let bounds_base = Bounds::new_const( v_base, v_base ).unwrap();
 		let bounds_upgrade = Bounds::new_const( v_upgrade, v_upgrade ).unwrap();
@@ -840,17 +939,17 @@ mod tests {
 		let bounds_mod_mult = Bounds::new_const( 0.0, 1.0 ).unwrap();
 		
 		let base = BaseConf::new( v_base, false, bounds_base, RoundingHelper::new_none(), None ).unwrap();
-		let upgrade = UpgradeConf::new( v_upgrade, bounds_upgrade );
-		let mod_of_base = ModConf::new( ModCalcStageEnum::Base, bounds_mod_base, RoundingHelper::new_none(), false, false );
-		let mod_of_upgrade = ModConf::new( ModCalcStageEnum::Base, bounds_mod_upgrade, RoundingHelper::new_none(), false, false );
-		let mod_of_base_plus_upgrade = ModConf::new( ModCalcStageEnum::Base, bounds_mod_base_plus_upgrade, RoundingHelper::new_none(), false, false );
-		let mod_mlt = ModMultConf::new( bounds_mod_mult );
+		let upgrade = Some( UpgradeConf::new( v_upgrade, bounds_upgrade ).unwrap() );
+		let mod_of_base = Some( ModConf::new( ModCalcStageEnum::Base, bounds_mod_base, RoundingHelper::new_none(), false, false ) );
+		let mod_of_upgrade = Some( ModConf::new( ModCalcStageEnum::Base, bounds_mod_upgrade, RoundingHelper::new_none(), false, false ) );
+		let mod_of_base_plus_upgrade = Some( ModConf::new( ModCalcStageEnum::Base, bounds_mod_base_plus_upgrade, RoundingHelper::new_none(), false, false ) );
+		let mod_mult = Some( ModMultConf::new( bounds_mod_mult ) );
 		
-		let mut cs = CharStat::new( base, upgrade, Some( mod_of_base ), Some( mod_of_upgrade ), Some( mod_of_base_plus_upgrade ), Some( mod_mlt ) );
-		assert_eq!( cs.new_modifier( mod_base ), Ok(()) );
-		assert_eq!( cs.new_modifier( mod_upgrade ), Ok(()) );
-		assert_eq!( cs.new_modifier( mod_base_and_up ), Ok(()) );
-		assert_eq!( cs.new_modifier( mod_mod_mlt ), Ok(()) );
+		let mut cs = CharStat::new( base, upgrade, mod_of_base, mod_of_upgrade, mod_of_base_plus_upgrade, mod_mult );
+		assert_eq!( cs.append_modifier( mod_base ), Ok(()) );
+		assert_eq!( cs.append_modifier( mod_upgrade ), Ok(()) );
+		assert_eq!( cs.append_modifier( mod_base_and_up ), Ok(()) );
+		assert_eq!( cs.append_modifier( mod_mod_mlt ), Ok(()) );
 		
 		let mod_mult = 1.0 + v_mod_mult;
 		
@@ -860,25 +959,27 @@ mod tests {
 		
 		assert_eq!( cs.base(), v_base + res_base_mod );
 		assert_eq!( cs.upgrade().unwrap(), v_upgrade + res_up_mod );
-		assert_eq!( cs.value(), v_base + res_base_mod + v_upgrade + res_up_mod + res_base_and_up_mod );
+		assert_eq!( cs.value(), v_base + v_upgrade + res_base_mod + res_up_mod + res_base_and_up_mod );
+		
+		assert_eq!( cs.set_ts( 25 ), Ok(()) );
+		assert_eq!( cs.base(), v_base );
+		assert_eq!( cs.value(), v_base + v_upgrade + res_up_mod + res_base_and_up_mod );
+		
+		assert_eq!( cs.set_ts( 50 ), Ok(()) );
+		assert_eq!( cs.value(), v_base + v_upgrade + res_base_and_up_mod );
+		
+		assert_eq!( cs.set_ts( 75 ), Ok(()) );
+		assert_eq!( cs.value(), v_base + v_upgrade );
 	}// modifiers
 	
 	#[test]
 	fn nan_handling() {
-		// Base
-		let base = BaseConf::new( f64::NAN, true, Bounds::default(), RoundingHelper::default(), None );
-		assert_eq!( base, None );
-		let base = BaseConf::new_clamping( f64::NAN, true, Bounds::default(), RoundingHelper::default(), None );
-		assert_eq!( base, None );
+		//let expected: CharStatError = CsInvalidValue::Nan( "value".to_string() ).into();
 		
 		// RoundingHelper
 		let bad_rh = RoundingHelper::new( RoundingFunctionEnum::Round, Some( f64::NAN ) );
 		assert_eq!( bad_rh.precision, None );
 		let ronuding_helper = RoundingHelper::new( RoundingFunctionEnum::Round, Some( 0.1 ) );
 		assert_eq!( ronuding_helper.precision, Some( 0.1 ) );
-		
-		// Modifier
-		let modif = Modifier::new( f64::NAN, None, ModCalcModeEnum::Add, ModCalcStageEnum::Base );
-		assert_eq!( modif, None );
 	}// nan_handling
 }

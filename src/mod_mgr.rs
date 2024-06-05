@@ -1,4 +1,4 @@
-use super::{Bounds, RoundingHelper, ModCalcModeEnum, ModCalcStageEnum, Modifier};
+use super::{ Bounds, RoundingHelper, ModCalcModeEnum, ModCalcStageEnum, Modifier, CharStatError, CsLogicIssue };
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ModConf {
@@ -12,6 +12,7 @@ pub struct ModConf {
 }// ModConf
 
 impl ModConf {
+	#[inline]
 	pub fn new ( stage: ModCalcStageEnum, bounds: Bounds, rounding_fn: RoundingHelper, is_min_percent: bool, is_max_percent: bool, ) -> Self {
 		ModConf {
 			value: 0.0,
@@ -24,9 +25,11 @@ impl ModConf {
 		}
 	}// new
 	
-	pub fn append_mod ( &mut self, value: f64, modifier: Modifier ) -> Result<(),()> {
-		if modifier.stage() != &self.stage {
-			return Err(())
+	#[inline]
+	pub fn append_mod ( &mut self, value: f64, modifier: Modifier ) -> Result<(), CharStatError > {
+		let stage = modifier.stage();
+		if stage != &self.stage {
+			return Err( CsLogicIssue::InvalidModifierStage( *stage ) )?
 		}
 		
 		self.mod_vec.push( modifier );
@@ -35,11 +38,39 @@ impl ModConf {
 		Ok(())
 	}
 	
+	#[inline]
+	pub fn get ( &self ) -> f64 {
+		self.value
+	}
+	
+	#[inline]
+	pub fn remove_expired ( &mut self, ts: u64 ) {
+		for i in ( 0..self.mod_vec.len() ).rev() {
+			let tmp = self.mod_vec.get( i );
+			
+			if let Some( element ) = tmp {
+				if element.has_expired( ts ) {
+					self.mod_vec.remove( i );
+				}
+			}
+		}// for
+	}// remove_expired
+	
+	#[inline]
+	pub fn set_rounding ( &mut self, new_val: RoundingHelper ) {
+		self.rounding_fn = new_val;
+	}
+}
+
+// pub-crate
+impl ModConf {
+	#[inline]
 	pub(crate) fn append_mod_unchecked ( &mut self, value: f64, modifier: Modifier ) {
 		self.mod_vec.push( modifier );
 		self.update( value );
 	}
 	
+	#[inline]
 	pub(crate) fn update ( &mut self, value: f64 ) {
 		let mut tmp = 0.0;
 		
@@ -63,25 +94,11 @@ impl ModConf {
 			eff_max *= value;
 		}
 		
+		tmp = self.rounding_fn.do_rounding( tmp );
+		
 		self.value = tmp.clamp( eff_min, eff_max );
 	}// update
-	
-	pub fn get ( &self ) -> f64 {
-		self.value
-	}
-	
-	pub fn remove_expired ( &mut self, ts: u64 ) {
-		for i in ( 0..self.mod_vec.len() ).rev() {
-			let tmp = self.mod_vec.get( i );
-			
-			if let Some( element ) = tmp {
-				if element.has_expired( ts ) {
-					self.mod_vec.remove( i );
-				}
-			}
-		}// for
-	}// remove_expired
-}// ModUpgradeConf
+}// ModConf
 
 
 #[cfg(test)]
