@@ -144,7 +144,7 @@ This project uses <a href="https://semver.org">SemVer 2.0.0</a>
 ## MSRV policy
 
 During development MSRV may be changed at any time. It will increase the minor version.
-Upon reaching 1.0.0, increasing MSRV will be considered a breaking change, and will increase a major version.
+Upon reaching 1.0.0, increasing MSRV will be considered a breaking change, and will increase the major version.
 
 
 ## License
