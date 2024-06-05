@@ -1,8 +1,8 @@
 <p align="center">
-	<a href="#status">Status</a> •
 	<a href="#description">Description</a> •
 	<a href="#usage">Usage</a> •
-	<a href="#components">Components</a> •
+	<a href="#main-components">Main Components</a> •
+	<a href="#error-handling">Error Handling</a> •
 	<a href="#calculation-stages">Calculation Stages</a> •
 	<a href="#rounding-precision">Rounding precision</a> •
 	<a href="#versioning">Versioning</a> •
@@ -12,40 +12,45 @@
 
 # CharStat ![Static Badge](https://img.shields.io/badge/CharStat_MSRV-1.77-purple) ![Static Badge](https://img.shields.io/badge/Version-0.1.2-purple)
 
-
-
-## Status
-
-This project is personal/experimental, so use at your own risk.<br>
-Currently uses unit err `Result<_, ()>` instead of custom error types.
+#### **This project is personal/experimental, so use at your own risk!**<br><br>
 
 
 ## Description
 
-A modular game dev library for handling character statistics, inspired by DnD. Allows configuring min/max bounds, mutability and modifiers.
+A modular game dev library for handling character statistics, inspired by DnD. Allows configuring min/max bounds, mutability and modifiers.<br>
+Base value can be modified in 4 ways:
+- directly via `set_value` or `set_value_clamping` if not used `.set_value_const()`
+- with upgrade - both values are summed
+- with multiplier - base *= ( mult.base ^ mult.exp )
+- with modifiers
 
 
 ## Usage
 
 ```rust
-// new_const( min, max ) -> Option< Bounds >
+use char_stat::{ CharStat, BaseConf, UpgradeConf, Bounds, RoundingHelper };
+
+// new_const( min, max ) -> Result< Bounds, CharStatError >
 let base_bounds = Bounds::new_const( 4.0, 20.0 ).expect( "hardcoded" );
 
-// new( value, is_mut, bounds, rounding, multiplier ) -> Option
+// new( value, is_mut, bounds, rounding, multiplier ) -> Result
 let base = BaseConf::new( 10.0, true, base_bounds, RoundingHelper::new_none(), None ).expect( "hardcoded" );
 
 let upgrade_bounds = Bounds::new_const( 0.0, 50.0 ).expect( "hardcoded" );
-let upgrade = UpgradeConf::new( 2.0, upgrade_bounds );
 
-let example = CharStat::new_no_mod( base, upgrade );
+// new( value, bounds ) -> Result
+let upgrade = UpgradeConf::new( 2.0, upgrade_bounds ).unwrap();
+
+let example = CharStat::new_no_mod( base, Some( upgrade ) );
 
 assert_eq!( example.value(), 12.0 )
 ```
 
-## Components
+## Main Components
+
 - `CharStat` holds all of the components
-	- all constructors require `BaseConf`
-	- all components other than `BaseConf` are an `Option< T >`, which is then turned into `Option< Box< T >>`
+	- all constructors require `BaseConf` passed by value
+	- all other components are passed as `Option< T >`, which are then turned into `Option< Box< T >>`. Enums allocate the same amount of memory on stack for every variant.
 	- 
 - `BaseConf` holds the base value
 	- value: `f64`
@@ -80,6 +85,9 @@ assert_eq!( example.value(), 12.0 )
 	- expiration timestamp: `Option< u64 >`
 	- mode: `ModCalcModeEnum`
 	- stage: `ModCalcStageEnum`
+
+Other Components
+
 - `ModCalcStageEnum` variants: Base, Upgrade, BasePlusUpgrade, ModMult
 - `ModCalcModeEnum`
 	- Add - value of `Modifier` is added to the total
@@ -94,7 +102,18 @@ assert_eq!( example.value(), 12.0 )
 	- implements `Default`: { function: RoundingFunctionEnum::None, precision: None }
 - `RoundingFunctionEnum` variants: Round, RoundTiesEven, Floor, Ceil, Trunk, None
 
+
+## Error Handling
+
+CharStat uses custom enums which implement `std:error:Error` trait.
+- `CharStatError` - public facing type, wrapper for other types
+- `CsLogicIssue`: InvalidModifierStage, InvalidModifierMode, MinGreaterThanMax, FieldIsConst, TimeTravel
+- `CsInvalidValue`: BelowMinimum, AboveMaximum, Nan
+- `CsMissingObject`: BaseMult, Upgrade, ModOfBase, ModOfUpgrade, ModOfBasePlusUpgrade, ModMult,
+
+
 ## Calculation Stages
+
 1. Modifier Multiplier
 2. Base value
 3. Base Multiplier ( unlike modifiers it changes the effective value used during calculations )
@@ -105,6 +124,7 @@ assert_eq!( example.value(), 12.0 )
 
 
 ## Rounding precision
+
 Default = 1.0<br>
 Algoritm: round_fn( value / precision ) * precision<br>
 
@@ -117,10 +137,12 @@ Example:<br>
 
 
 ## Versioning
-This project uses <a href="https://semver.org">SemVer 2.0.0</a> for versioning.
+
+This project uses <a href="https://semver.org">SemVer 2.0.0</a>
 
 
 ## MSRV policy
+
 During development MSRV may be changed at any time. It will increase the minor version.
 Upon reaching 1.0.0, increasing MSRV will be considered a breaking change, and will increase a major version.
 
