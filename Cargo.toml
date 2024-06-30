@@ -5,8 +5,25 @@ edition = "2021"
 authors = ["Sarchimor"]
 license = "MIT OR Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# --Dependencies
+
+[dependencies]
+derive-new = "0.6.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "dep:serde_json"]
+
+# --Profiles
 
 [profile.release]
-lto = "thin"        # Enable link-time optimization
+lto = true	        # Enable link-time optimization, true / "fat" > "thin" > false > "off"
 codegen-units = 1   # Reduce number of codegen units to increase optimizations
+strip = true				# strip symbols, makes debugging much worse, breaks wasm target
+panic = "abort"
+
+[profile.release.package.'*']
+strip = true
+

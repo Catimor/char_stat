@@ -1,23 +1,37 @@
-use std::fmt;
+use std::fmt::{ Display, Formatter };
+
+#[cfg(feature = "serde")]
+use serde::{ Serialize, Deserialize };
+
+// --Imports
+//------------------------------------------------------------------------------
+// --Modules
+
 use crate::{ CharStatError, CsLogicIssue, CsInvalidValue };
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+// --Modules
+//------------------------------------------------------------------------------
+// struct - Bounds
+
+/// Manages the allowed min/max values and whether those are mutable.
+#[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
+#[derive( Debug, Clone, Copy, PartialEq,  )]
 pub struct Bounds {
 	v_min: f64,
 	v_max: f64,
 	is_min_mut: bool,
 	is_max_mut: bool,
-}// Bounds
+}
 
 impl Bounds {
+	/// # Errors
+	/// `CsInvalidValue::Nan` when either `v_min` or `v_max` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `v_min` > `v_max` <br>
 	#[inline]
 	pub fn new ( v_min: f64, v_max: f64, is_min_mut: bool, is_max_mut: bool ) -> Result< Self, CharStatError > {
-		if v_min > v_max {
-			return Err( CsLogicIssue::MinGreaterThanMax )?
-		}
-		
 		Bounds::check_nan( v_min, "v_min".to_string() )?;
 		Bounds::check_nan( v_max, "v_max".to_string() )?;
+		Bounds::check_values( v_min, v_max )?;
 		
 		Ok( Bounds {
 			v_min,
@@ -25,16 +39,18 @@ impl Bounds {
 			is_min_mut,
 			is_max_mut,
 		})
-	}// new
+	}
 	
+	/// mutability within setters disabled
+	/// 
+	/// # Errors
+	/// `CsInvalidValue::Nan` when either `v_min` or `v_max` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `v_min` > `v_max` <br>
 	#[inline]
 	pub fn new_const ( v_min: f64, v_max: f64 ) -> Result< Self, CharStatError > {
 		Bounds::check_nan( v_min, "v_min".to_string() )?;
 		Bounds::check_nan( v_max, "v_max".to_string() )?;
-		
-		if v_min > v_max {
-			return Err( CsLogicIssue::MinGreaterThanMax )?
-		}
+		Bounds::check_values( v_min, v_max )?;
 		
 		Ok( Bounds {
 			v_min,
@@ -42,16 +58,18 @@ impl Bounds {
 			is_min_mut: false,
 			is_max_mut: false,
 		})
-	}// new_const
+	}
 	
+	/// mutability within setters enabled
+	/// 
+	/// # Errors
+	/// `CsInvalidValue::Nan` when either `v_min` or `v_max` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `v_min` > `v_max` <br>
 	#[inline]
 	pub fn new_mut ( v_min: f64, v_max: f64 ) -> Result< Self, CharStatError > {
 		Bounds::check_nan( v_min, "v_min".to_string() )?;
 		Bounds::check_nan( v_max, "v_max".to_string() )?;
-		
-		if v_min > v_max {
-			return Err( CsLogicIssue::MinGreaterThanMax )?
-		}
+		Bounds::check_values( v_min, v_max )?;
 		
 		Ok( Bounds {
 			v_min,
@@ -59,45 +77,51 @@ impl Bounds {
 			is_min_mut: true,
 			is_max_mut: true,
 		})
-	}// new_mut
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `new_val` > `self.v_max` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.is_min_mut` is false <br>
 	#[inline]
 	pub fn set_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
-		Bounds::check_nan( new_val, "new_val".to_string() )?;
-		
 		if !self.is_min_mut {
 			return Err( CsLogicIssue::FieldIsConst )?
 		}
-		if new_val > self.v_max {
-			return Err( CsLogicIssue::MinGreaterThanMax )?
-		}
+		
+		Bounds::check_nan( new_val, "new_val".to_string() )?;
+		Bounds::check_values( new_val, self.v_max )?;
 		
 		self.v_min = new_val;
 		
 		Ok(())
-	}// set_min
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `self.v_min` > `new_val` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.is_max_mut` is false <br>
 	#[inline]
 	pub fn set_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
-		Bounds::check_nan( new_val, "new_val".to_string() )?;
-		
 		if !self.is_min_mut {
 			return Err( CsLogicIssue::FieldIsConst )?
 		}
-		if new_val < self.v_min {
-			return Err( CsLogicIssue::MinGreaterThanMax )?
-		}
+		
+		Bounds::check_nan( new_val, "new_val".to_string() )?;
+		Bounds::check_values( self.v_min, new_val )?;
 		
 		self.v_max = new_val;
 		
 		Ok(())
-	}// set_max
+	}
 	
+	/// `set_min` method will not be allowed (runtime check)
 	#[inline]
 	pub fn set_min_const ( &mut self ) {
 		self.is_min_mut = false;
 	}
 	
+	/// `set_max` method will not be allowed (runtime check)
 	#[inline]
 	pub fn set_max_const ( &mut self ) {
 		self.is_max_mut = false;
@@ -112,36 +136,36 @@ impl Bounds {
 	pub fn max ( &self ) -> f64 {
 		self.v_max
 	}
-}// Bounds
+}
 
 //priv
 impl Bounds {
 	#[inline(always)]
+	#[doc(hidden)]
 	fn check_nan( value: f64, name: String ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( name ) )?
+			return Err( CsInvalidValue::Nan( name ).into() )
 		}
 		
 		Ok(())
 	}
-}// Bounds
-
-impl Default for Bounds {
-	#[inline]
-	fn default () -> Self {
-		Bounds{
-			v_min: 0.0,
-			v_max: 1.0,
-			is_min_mut: true,
-			is_max_mut: true,
+	
+	#[inline(always)]
+	#[doc(hidden)]
+	fn check_values( min: f64, max: f64 ) -> Result<(), CharStatError > {
+		if min > max {
+			
+			return Err( CsLogicIssue::MinGreaterThanMax.into() )
 		}
-	}// new
-}// Bounds
+		
+		Ok(())
+	}
+}// priv
 
-impl fmt::Display for Bounds {
+impl Display for Bounds {
 	#[inline]
-	fn fmt( &self, f: &mut fmt::Formatter<'_> ) -> fmt::Result {
+	fn fmt( &self, f: &mut Formatter<'_> ) -> std::fmt::Result {
 		let min_m = if self.is_min_mut {
 			"mut"
 		} else {
@@ -158,86 +182,9 @@ impl fmt::Display for Bounds {
 	}
 }
 
-/*
-#[derive(Clone, PartialEq, Debug)]
-pub struct BoundsModified {
-	bounds: Bounds,
-	min_modified : f64,
-	max_modified : f64,
-}
-
-impl BoundsModified {
-	pub fn new ( bounds: Bounds ) -> Self {
-		BoundsModified {
-			min_modified: bounds.min(),
-			max_modified: bounds.max(),
-			bounds,
-		}
-	}// new
-	
-	pub(crate) fn modify_bounds( &mut self, new_bounds: (f64, f64) ) -> Result<(), CharStatError > {
-		let mod_min = new_bounds.0 + self.bounds.min();
-		let mod_max = new_bounds.1 + self.bounds.max();
-		
-		if mod_min > mod_max {
-			return Err(())
-		}
-		
-		self.min_modified = mod_min;
-		self.max_modified = mod_max;
-		
-		Ok(())
-	}
-	
-	pub fn min_modified( &self ) -> f64 {
-		self.min_modified
-	}
-	
-	pub fn max_modified( &self ) -> f64 {
-		self.max_modified
-	}
-}// BoundsModified
-
-impl Default for BoundsModified {
-	#[inline]
-	fn default () -> Self {
-		BoundsModified::new( Bounds::default() )
-	}// new
-}// BoundsModified
-
-// indirect calls to Bounds
-impl BoundsModified {
-	pub fn set_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
-		self.bounds.set_min( new_val )?;
-		self.min_modified = new_val;
-		
-		Ok(())
-	}// set_min
-	
-	pub fn set_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
-		self.bounds.set_max( new_val )?;
-		self.max_modified = new_val;
-		
-		Ok(())
-	}// set_max
-	
-	pub fn set_min_const ( &mut self ) {
-		self.bounds.set_min_const();
-	}
-	
-	pub fn set_max_const ( &mut self ) {
-		self.bounds.set_max_const();
-	}
-	
-	pub fn min ( &self ) -> f64 {
-		self.bounds.min()
-	}
-	
-	pub fn max ( &self ) -> f64 {
-		self.bounds.max()
-	}
-}// BoundsModified
-*/
+// struct - Bounds
+//------------------------------------------------------------------------------
+// --Tests
 
 #[cfg(test)]
 mod tests {
@@ -262,7 +209,7 @@ mod tests {
 		assert_eq!( bad_max, Err( expected.clone() ) );
 		let bad_max = Bounds::new( 5.0, f64::NAN, true, false, );
 		assert_eq!( bad_max, Err( expected ) );
-	}// nan_handling
+	}
 	
 	#[test]
 	fn mutability() {
@@ -282,5 +229,8 @@ mod tests {
 		
 		assert_eq!( bounds_2.set_min( 1.0 ), Err( expected.clone() ) );
 		assert_eq!( bounds_2.set_max( 10.0 ), Err( expected ) );
-	}// mutability
+	}
 }
+
+// --Tests
+//------------------------------------------------------------------------------

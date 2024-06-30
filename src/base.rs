@@ -1,17 +1,33 @@
-use crate::{CsLogicIssue, CsMissingComponent};
+#[cfg(feature = "serde")]
+use serde::{ Serialize, Deserialize };
 
-use super::{ Bounds, BaseMultConf, RoundingHelper, CharStatError, CsInvalidValue };
+// --Imports
+//------------------------------------------------------------------------------
+// --Modules
 
-#[derive(Clone, PartialEq, Debug)]
+use crate::{ Bounds, BaseMultConf, RoundingHelper, CharStatError, CsInvalidValue, CsLogicIssue, CsMissingComponent };
+
+// --Modules
+//------------------------------------------------------------------------------
+// struct - BaseConf
+
+/// Manages the base value, whether it's mutable, its bounds, rounding and optional multiplier.
+#[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
+#[derive( Debug, Clone, PartialEq,  )]
 pub struct BaseConf {
 	value: f64,
 	is_mut: bool,
 	bounds: Bounds,
 	rounding_fn: RoundingHelper,
 	mult: Option< BaseMultConf >,
-}// BaseConf
+}
 
 impl BaseConf {
+	/// constructor
+	/// 
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `value` is `f64::NAN` <br>
+	/// `CsInvalidValue::BelowMinimum` or `CsInvalidValue::AboveMaximum` when `value` is not within `bounds` <br>
 	#[inline]
 	pub fn new ( value: f64, is_mut: bool, bounds: Bounds, rounding_fn: RoundingHelper, mult: Option< BaseMultConf > ) -> Result< Self, CharStatError > {
 		BaseConf::check_inval( value, &bounds )?;
@@ -23,8 +39,13 @@ impl BaseConf {
 			rounding_fn,
 			mult,
 		})
-	}// new
+	}
 	
+	/// constructor <br>
+	/// if `value` is outside the `bounds` then it's set to nearest valid value.
+	/// 
+	/// # Errors
+	/// CsInvalidValue::Nan when `value` is `f64::NAN` <br>
 	#[inline]
 	pub fn new_clamping ( value: f64, is_mut: bool, bounds: Bounds, rounding_fn: RoundingHelper, mult: Option< BaseMultConf > ) -> Result< Self, CharStatError > {
 		BaseConf::check_nan( value )?;
@@ -36,8 +57,12 @@ impl BaseConf {
 			rounding_fn,
 			mult,
 		})
-	}// new_clamping
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `value` is `f64::NAN` <br>
+	/// `CsInvalidValue::BelowMinimum` or `CsInvalidValue::AboveMaximum` when `value` is not within `self.bounds` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.is_mut` is false <br>
 	#[inline]
 	pub fn set_value ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		if !self.is_mut {
@@ -49,8 +74,13 @@ impl BaseConf {
 		self.value = value;
 		
 		Ok(())
-	}// set_value
+	}
 	
+	/// if `value` is outside the `bounds` then it's set to nearest valid value.
+	/// 
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `value` is `f64::NAN` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.is_mut` is false <br>
 	#[inline]
 	pub fn set_value_clamping ( &mut self, value: f64 ) -> Result<(), CharStatError > {
 		if !self.is_mut {
@@ -62,7 +92,7 @@ impl BaseConf {
 		self.value = value.clamp( self.bounds.min(), self.bounds.max() );
 		
 		Ok(())
-	}// set_value
+	}
 	
 	#[inline]
 	pub fn value ( &self ) -> f64 {
@@ -73,8 +103,9 @@ impl BaseConf {
 		}
 		
 		self.rounding_fn.do_rounding( out )
-	}// get_value
+	}
 	
+	/// disables mutability of `self.value`
 	#[inline]
 	pub fn set_value_const ( &mut self ) {
 		self.is_mut = false;
@@ -84,30 +115,31 @@ impl BaseConf {
 	pub fn set_rounding ( &mut self, new_val: RoundingHelper ) {
 		self.rounding_fn = new_val;
 	}
-}// BaseConf
+}
 
 // bounds
 impl BaseConf {
-	/*
-	pub fn modify_bounds ( &mut self, new_bounds: (f64, f64) ) -> Result<(), CharStatError > {
-		self.bounds.modify_bounds( new_bounds )?;
-		
-		Ok(())
-	}// modify_bounds
-	*/
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `new_val` > `self.v_max` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.bounds.is_min_mut` is false <br>
 	#[inline]
 	pub fn set_bounds_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.bounds.set_min( new_val )?;
 		
 		Ok(())
-	}// set_min
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsLogicIssue::MinGreaterThanMax` when `self.v_min` > `new_val` <br>
+	/// `CsLogicIssue::FieldIsConst` when `self.bounds.is_max_mut` is false <br>
 	#[inline]
 	pub fn set_bounds_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		self.bounds.set_max( new_val )?;
 		
 		Ok(())
-	}// set_max
+	}
 	
 	#[inline]
 	pub fn set_bounds_min_const ( &mut self ) {
@@ -128,23 +160,14 @@ impl BaseConf {
 	pub fn bounds_max ( &self ) -> f64 {
 		self.bounds.max()
 	}
-	/*
-	pub fn get_bounds_modified ( &self ) -> (f64, f64) {
-		(self.bounds.min_modified(), self.bounds.max_modified())
-	}
-	
-	pub fn get_min_modified ( &self ) -> f64 {
-		self.bounds.min_modified()
-	}
-	
-	pub fn get_max_modified ( &self ) -> f64 {
-		self.bounds.max_modified()
-	}
-	*/
-}// BaseConf.bounds: Bounds
+}// bounds
 
 // mult
 impl BaseConf {
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsInvalidValue::BelowMinimum` or `CsInvalidValue::AboveMaximum` when `new_val` is not within `self.bounds` <br>
+	/// `CsMissingComponent::BaseMult` when `BaseMultConf` is missing <br>
 	#[inline]
 	pub fn set_mult_base ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( mlt ) = &mut self.mult {
@@ -154,8 +177,12 @@ impl BaseConf {
 		}
 		
 		Err( CsMissingComponent::BaseMult.into() )
-	}// set_mult_base
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsInvalidValue::BelowMinimum` or `CsInvalidValue::AboveMaximum` when `new_val` is not within `self.bounds` <br>
+	/// `CsMissingComponent::BaseMult` when `BaseMultConf` is missing <br>
 	#[inline]
 	pub fn set_mult_exponent ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( mlt ) = &mut self.mult {
@@ -165,8 +192,11 @@ impl BaseConf {
 		}
 		
 		Err( CsMissingComponent::BaseMult.into() )
-	}// set_mult_exponent
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsMissingComponent::BaseMult` when `BaseMultConf` is missing <br>
 	#[inline]
 	pub fn set_mult_base_clamping ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( mlt ) = &mut self.mult {
@@ -176,8 +206,11 @@ impl BaseConf {
 		}
 		
 		Err( CsMissingComponent::BaseMult.into() )
-	}// set_mult_base_clamping
+	}
 	
+	/// # Errors
+	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
+	/// `CsMissingComponent::BaseMult` when `BaseMultConf` is missing <br>
 	#[inline]
 	pub fn set_mult_exponent_clamping ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if let Some( mlt ) = &mut self.mult {
@@ -187,12 +220,13 @@ impl BaseConf {
 		}
 		
 		Err( CsMissingComponent::BaseMult.into() )
-	}// set_mult_exponent_clamping
-}// BaseConf.mult: BaseMultConf
+	}
+}// mult
 
 //priv
 impl BaseConf {
 	#[inline(always)]
+	#[doc(hidden)]
 	fn check_inval( value: f64, bounds: &Bounds ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
@@ -211,6 +245,7 @@ impl BaseConf {
 	}
 	
 	#[inline(always)]
+	#[doc(hidden)]
 	fn check_nan( value: f64 ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
@@ -219,29 +254,19 @@ impl BaseConf {
 		
 		Ok(())
 	}
-}// BaseConf - priv
+}// priv
 
-impl Default for BaseConf {
-	#[inline]
-	fn default () -> Self {
-		BaseConf {
-			value: 0.0,
-			is_mut: true,
-			bounds: Bounds::default(),
-			rounding_fn: RoundingHelper::default(),
-			mult: None,
-		}
-	}// default
-}// Default for BaseConf
+// struct - BaseConf
+//------------------------------------------------------------------------------
+// --Tests
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::RoundingFunctionEnum;
+	use crate::{ BaseConf, Bounds, RoundingFnEnum, RoundingHelper, CharStatError, CsInvalidValue };
 	
 	#[test]
 	fn basic_functional() {
-		let rounding_helper = RoundingHelper::new( RoundingFunctionEnum::None, None );
+		let rounding_helper = RoundingHelper::new( RoundingFnEnum::None, None );
 		
 		let bounds = Bounds::new_const( 0.0, 10.0 ).unwrap();
 		let base = BaseConf::new( 15.0, true, bounds, rounding_helper.clone(), None );
@@ -258,15 +283,19 @@ mod tests {
 		
 		assert_eq!( base.set_value( 5.0 ), Ok(()) );
 		assert_eq!( base.value(), 5.0 );
-	}// basic_functional
+	}
 	
 	#[test]
 	fn nan_handling() {
 		let expected: CharStatError = CsInvalidValue::Nan( "value".to_string() ).into();
+		let bounds = Bounds::new_const( 0.0, 1.0 ).unwrap();
 		
-		let base = BaseConf::new( f64::NAN, true, Bounds::default(), RoundingHelper::default(), None );
+		let base = BaseConf::new( f64::NAN, true, bounds.clone(), RoundingHelper::default(), None );
 		assert_eq!( base, Err( expected.clone() ) );
-		let base = BaseConf::new_clamping( f64::NAN, true, Bounds::default(), RoundingHelper::default(), None );
+		let base = BaseConf::new_clamping( f64::NAN, true, bounds.clone(), RoundingHelper::default(), None );
 		assert_eq!( base, Err( expected ) );
-	}// nan_handling
+	}
 }
+
+// --Tests
+//------------------------------------------------------------------------------
