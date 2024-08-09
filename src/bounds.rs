@@ -1,6 +1,6 @@
 use std::fmt::{ Display, Formatter };
 
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -13,7 +13,7 @@ use crate::{ CharStatError, CsLogicIssue, CsInvalidValue };
 //------------------------------------------------------------------------------
 // struct - Bounds
 
-/// Manages the allowed min/max values and whether those are mutable.
+/// Manages the allowed min/max values and whether they are mutable.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, Copy, PartialEq,  )]
 pub struct Bounds {
@@ -86,7 +86,7 @@ impl Bounds {
 	#[inline]
 	pub fn set_min ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if !self.is_min_mut {
-			return Err( CsLogicIssue::FieldIsConst )?
+			return Err( CsLogicIssue::FieldIsConst.into() )
 		}
 		
 		Bounds::check_nan( new_val, "new_val".to_string() )?;
@@ -104,7 +104,7 @@ impl Bounds {
 	#[inline]
 	pub fn set_max ( &mut self, new_val: f64 ) -> Result<(), CharStatError > {
 		if !self.is_min_mut {
-			return Err( CsLogicIssue::FieldIsConst )?
+			return Err( CsLogicIssue::FieldIsConst.into() )
 		}
 		
 		Bounds::check_nan( new_val, "new_val".to_string() )?;
@@ -140,8 +140,8 @@ impl Bounds {
 
 //priv
 impl Bounds {
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_nan( value: f64, name: String ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
@@ -151,8 +151,8 @@ impl Bounds {
 		Ok(())
 	}
 	
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_values( min: f64, max: f64 ) -> Result<(), CharStatError > {
 		if min > max {
 			
@@ -186,7 +186,7 @@ impl Display for Bounds {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use super::*;
 	

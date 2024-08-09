@@ -2,6 +2,9 @@
 //! 
 //! Game dev library for handling character statistics.
 //! 
+//! The goal of this crate is to make composable stat containers ( hopefully ) easy.
+//! Each instance of CharStat takes +/- 112 Bytes on stack + al least 72 Bytes on heap.
+//! 
 //! ## Roadmap
 //! 
 //! - [x] Main components: Base, Upgrade <br>
@@ -12,7 +15,7 @@
 //! 
 //! # Usage
 //!
-//! base with upgrade
+//! Base with upgrade.
 //!  ```rust
 //! use char_stat::{ CharStat, BaseConf, UpgradeConf, Bounds, RoundingHelper };
 //! 
@@ -32,7 +35,7 @@
 //! assert_eq!( example.value(), 12.0 )
 //! ```
 //! 
-//! Base with multiplier <br>
+//! Base with multiplier. <br>
 //! Could be used to calculate exp points required for next level. Here exponent is the characters' current level.
 //! ```rust
 //! use char_stat::{ CharStat, BaseConf, BaseMultConf, Bounds, RoundingHelper, RoundingFnEnum };
@@ -58,7 +61,7 @@
 //! assert_eq!( example.value(), 1920.0 );
 //! ```
 //! 
-//! Base with modifiers
+//! Base with modifiers.
 //! ```rust
 //! use char_stat::{ CharStat, BaseConf, ModConf, Modifier, ModCommon, ModCalcMode, ModCalcStage, Bounds, RoundingHelper };
 //! 
@@ -86,15 +89,21 @@
 //------------------------------------------------------------------------------
 // --Lints
 
-//#![allow(unused_variables)]
-//#![allow(dead_code)]
-#![forbid(unsafe_code)]
-#![warn(clippy::all)]
+#![forbid( unsafe_code )]
+#![warn( clippy::all )]
 // pedantic
 #![warn(
 	clippy::cast_lossless, 
+	clippy::cast_possible_truncation, 
+	clippy::cast_possible_wrap, 
+	clippy::cast_precision_loss, 
 	clippy::checked_conversions, 
+	clippy::cloned_instead_of_copied, 
+	clippy::copy_iterator, 
 	clippy::default_trait_access, 
+	clippy::enum_glob_use, 
+	clippy::explicit_into_iter_loop, 
+	clippy::explicit_iter_loop, 
 	clippy::float_cmp, 
 	clippy::fn_params_excessive_bools, 
 	clippy::if_not_else,
@@ -103,10 +112,16 @@
 	clippy::inconsistent_struct_constructor,
 	clippy::index_refutable_slice,
 	clippy::inefficient_to_string,
+	clippy::invalid_upcast_comparisons, 
 	clippy::items_after_statements,
+	clippy::iter_filter_is_ok, 
+	clippy::iter_filter_is_some, 
+	clippy::large_digit_groups, 
 	clippy::large_types_passed_by_value,
 	clippy::manual_assert,
+	clippy::manual_is_variant_and, 
 	clippy::manual_let_else,
+	clippy::manual_ok_or, 
 	clippy::manual_string_new,
 	clippy::match_on_vec_items,
 	clippy::match_same_arms,
@@ -114,12 +129,14 @@
 	clippy::match_wildcard_for_single_variants,
 	clippy::mismatching_type_param_order,
 	clippy::missing_errors_doc,
+	clippy::missing_inline_in_public_items,
 	clippy::missing_panics_doc,
 	//clippy::module_name_repetitions,
 	clippy::mut_mut,
 	clippy::needless_continue,
 	clippy::needless_for_each,
 	clippy::needless_pass_by_value,
+	clippy::option_as_ref_cloned, 
 	clippy::option_option,
 	clippy::redundant_closure_for_method_calls,
 	clippy::redundant_else,
@@ -129,20 +146,40 @@
 	clippy::semicolon_if_nothing_returned,
 	clippy::should_panic_without_expect,
 	clippy::similar_names,
+	clippy::single_char_pattern, 
 	clippy::single_match_else,
 	clippy::stable_sort_primitive,
 	clippy::str_split_at_newline,
 	clippy::string_add_assign,
 	clippy::struct_excessive_bools,
 	clippy::struct_field_names,
+	clippy::suspicious_xor_used_as_pow, 
 	clippy::too_many_lines,
 	clippy::trivially_copy_pass_by_ref,
 	clippy::unicode_not_nfc,
 	clippy::uninlined_format_args,
+	clippy::unnecessary_box_returns, 
 	clippy::unnecessary_wraps,
 	clippy::unnested_or_patterns,
 	clippy::unused_self,
-	clippy::missing_inline_in_public_items,
+)]
+// restriction
+#![warn(
+	clippy::else_if_without_else, 
+	//clippy::field_scoped_visibility_modifiers, // lint not recognized on 1.77
+	clippy::fn_to_numeric_cast_any, 
+	clippy::format_push_string, 
+	clippy::if_then_some_else_none, 
+	clippy::iter_over_hash_type, 
+	clippy::let_underscore_must_use, 
+	clippy::rc_buffer, 
+	clippy::rc_mutex, 
+	clippy::same_name_method, 
+	clippy::tests_outside_test_module, 
+	clippy::try_err, 
+	clippy::undocumented_unsafe_blocks, 
+	clippy::unwrap_in_result, 
+	
 )]
 // style
 #![warn(
@@ -205,7 +242,7 @@
 //------------------------------------------------------------------------------
 // --Imports
 
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -236,8 +273,10 @@ pub use mod_mgr::*;
 mod mod_mult;
 pub use mod_mult::*;
 
-//pub mod builder;
-//use builder::*;
+#[cfg( feature = "builder" )]
+mod builder;
+#[cfg( feature = "builder" )]
+pub use builder::*;
 
 // --Modules
 //------------------------------------------------------------------------------
@@ -256,7 +295,7 @@ pub struct CharStat {
 	val_base_plus_upgrade_mod: f64,
 	val_mod_mult: f64,
 	
-	base:											BaseConf,
+	base:											Box< BaseConf >,
 	upgrade:									Option< Box< UpgradeConf > >,
 	mod_of_base:							Option< Box< ModConf > >,
 	mod_of_upgrade:						Option< Box< ModConf > >,
@@ -286,7 +325,7 @@ impl CharStat {
 			panic!()
 		}
 		
-		let tmp = mod_of_base.is_none() || mod_of_upgrade.is_none() || mod_of_base_plus_upgrade.is_none();
+		let tmp = mod_of_base.is_none() && mod_of_upgrade.is_none() && mod_of_base_plus_upgrade.is_none();
 		assert!( !( tmp && mod_mult.is_some() ));
 		
 		let val_mod_mult = if let Some( tmp ) = &mod_mult {
@@ -315,7 +354,7 @@ impl CharStat {
 			val_base_plus_upgrade_mod: 0.0,
 			val_mod_mult,
 			
-			base,
+			base: Box::new( base ),
 			upgrade,
 			mod_of_base,
 			mod_of_upgrade,
@@ -343,7 +382,7 @@ impl CharStat {
 			val_base_plus_upgrade_mod: 0.0,
 			val_mod_mult: 1.0,
 			
-			base,
+			base: Box::new( base ),
 			upgrade: None,
 			mod_of_base: None,
 			mod_of_upgrade: None,
@@ -372,7 +411,7 @@ impl CharStat {
 			val_base_plus_upgrade_mod: 0.0,
 			val_mod_mult: 1.0,
 			
-			base,
+			base: Box::new( base ),
 			upgrade,
 			mod_of_base: None,
 			mod_of_upgrade: None,
@@ -529,13 +568,13 @@ impl CharStat {
 // priv
 impl CharStat {
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_current_value ( &mut self ) {
 		self.current_value = self.val_base + self.val_base_mod + self.val_upgrade + self.val_upgrade_mod + self.val_base_plus_upgrade_mod;
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn append_base_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( mod_of_base ) = &mut self.mod_of_base {
 			mod_of_base.append_mod_unchecked( self.base.value(), modifier );
@@ -548,7 +587,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn append_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let ( Some( mod_of_upgrade ), Some( upgrade ) ) = ( &mut self.mod_of_upgrade, &mut self.upgrade ) {
 			mod_of_upgrade.append_mod_unchecked( upgrade.value(), modifier );
@@ -561,7 +600,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn append_base_plus_upgrade_mod( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( tmp ) = &mut self.mod_of_base_plus_upgrade {
 			let val = self.val_base + self.val_upgrade;
@@ -575,7 +614,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn append_modmult( &mut self, modifier: Modifier ) -> Result<(), CharStatError > {
 		if let Some( mod_mult ) = &mut self.mod_mult {
 			mod_mult.append_mod_unchecked( modifier );
@@ -601,7 +640,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn remove_expired_modifiers( &mut self ) {
 		if let Some( tmp ) = &mut self.mod_mult {
 			tmp.remove_expired( self.time_stamp );
@@ -627,7 +666,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_base( &mut self ) {
 		self.val_base = self.base.value();
 		
@@ -637,7 +676,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_base_mod( &mut self ) {
 		if let Some( mod_mgr ) = &mut self.mod_of_base {
 			mod_mgr.update( self.val_base );
@@ -646,7 +685,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_upgrade( &mut self ) {
 		if let Some( upgrade ) = &self.upgrade {
 			self.val_upgrade = upgrade.value();
@@ -662,7 +701,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_upgrade_mod( &mut self ) {
 		if let Some( mod_mgr ) = &mut self.mod_of_upgrade {
 			mod_mgr.update( self.val_upgrade );
@@ -671,7 +710,7 @@ impl CharStat {
 	}
 	
 	#[inline]
-	#[doc(hidden)]
+	#[doc( hidden )]
 	fn update_base_plus_upgrade_mod( &mut self ) {
 		if let Some( mod_mgr ) = &mut self.mod_of_base_plus_upgrade {
 			mod_mgr.update( self.val_base + self.val_upgrade );
@@ -757,6 +796,7 @@ impl CharStat {
 }// base
 
 // base mult
+/// Methods for manipulation of BaseMultConf
 impl CharStat {
 	/// # Errors
 	/// `CsInvalidValue::Nan` when `new_val` is `f64::NAN` <br>
@@ -1020,7 +1060,7 @@ impl RoundingHelper {
 		}
 	}
 	
-	pub(crate) fn do_rounding( &self, mut value: f64 ) -> f64 {
+	pub( crate ) fn do_rounding( &self, mut value: f64 ) -> f64 {
 		if let RoundingFnEnum::None = self.function {
 			return value;
 		}
@@ -1050,7 +1090,7 @@ impl Default for RoundingHelper {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod char_stat_tests {
 	use super::*;
 	

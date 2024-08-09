@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -11,6 +11,7 @@ use super::{ Bounds, RoundingHelper, CharStatError, CsInvalidValue };
 //------------------------------------------------------------------------------
 // struct - UpgradeConf
 
+/// Manages upgrade value.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, PartialEq,  )]
 pub struct UpgradeConf {
@@ -132,31 +133,31 @@ impl UpgradeConf {
 
 //priv
 impl UpgradeConf {
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_inval( value: f64, bounds: &Bounds ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( "value".to_string() ) )?
+			return Err( CsInvalidValue::Nan( "value".to_string() ).into() )
 		}
 		if value < bounds.min() {
 			
-			return Err( CsInvalidValue::BelowMinimum( "value".to_string() ) )?
+			return Err( CsInvalidValue::BelowMinimum( "value".to_string() ).into() )
 		}
 		if value > bounds.max() {
 			
-			return Err( CsInvalidValue::AboveMaximum( "value".to_string() ) )?
+			return Err( CsInvalidValue::AboveMaximum( "value".to_string() ).into() )
 		}
 		
 		Ok(())
 	}
 	
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_nan( value: f64 ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( "value".to_string() ) )?
+			return Err( CsInvalidValue::Nan( "value".to_string() ).into() )
 		}
 		
 		Ok(())
@@ -167,7 +168,7 @@ impl UpgradeConf {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use super::*;
 	

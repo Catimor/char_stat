@@ -5,25 +5,32 @@ edition = "2021"
 authors = ["Sarchimor"]
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "char_stat"
+path = "src/lib.rs"
+
+#[[bin]]
+#name = "cs_test_bin"
+#path = "src/bin.rs"
+
 # --Dependencies
 
 [dependencies]
-derive-new = "0.6.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 
 [features]
-default = ["serde"]
+default = ["serde", "builder"]
 serde = ["dep:serde", "dep:serde_json"]
+builder = []
 
 # --Profiles
 
 [profile.release]
 lto = true	        # Enable link-time optimization, true / "fat" > "thin" > false > "off"
 codegen-units = 1   # Reduce number of codegen units to increase optimizations
-strip = true				# strip symbols, makes debugging much worse, breaks wasm target
 panic = "abort"
 
 [profile.release.package.'*']
-strip = true
+codegen-units = 1
 

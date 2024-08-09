@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -11,6 +11,8 @@ use super::{ RoundingHelper, Bounds, CharStatError, CsInvalidValue };
 //------------------------------------------------------------------------------
 // struct - BaseMultConf
 
+/// Calculates the multiplier from self.base raised to the power in self.exponent.
+/// Base is then multiplied by multiplier and used in later stages of calculation.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, PartialEq,  )]
 pub struct BaseMultConf {
@@ -170,15 +172,15 @@ impl BaseMultConf {
 	fn check_inval( value: f64, bounds: &Bounds, name: String ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( name ) )?
+			return Err( CsInvalidValue::Nan( name  ).into() )
 		}
 		if value < bounds.min() {
 			
-			return Err( CsInvalidValue::BelowMinimum( name ) )?
+			return Err( CsInvalidValue::BelowMinimum( name  ).into() )
 		}
 		if value > bounds.max() {
 			
-			return Err( CsInvalidValue::AboveMaximum( name ) )?
+			return Err( CsInvalidValue::AboveMaximum( name  ).into() )
 		}
 		
 		Ok(())
@@ -189,7 +191,7 @@ impl BaseMultConf {
 	fn check_nan( value: f64, name: String ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( name ) )?
+			return Err( CsInvalidValue::Nan( name  ).into() )
 		}
 		
 		Ok(())
@@ -209,7 +211,7 @@ impl BaseMultConf {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use crate::{ BaseConf, BaseMultConf, Bounds, CharStatError, CsInvalidValue, RoundingHelper, RoundingFnEnum };
 	

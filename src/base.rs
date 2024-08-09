@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -19,7 +19,7 @@ pub struct BaseConf {
 	is_mut: bool,
 	bounds: Bounds,
 	rounding_fn: RoundingHelper,
-	mult: Option< BaseMultConf >,
+	mult: Option< Box< BaseMultConf > >,
 }
 
 impl BaseConf {
@@ -37,7 +37,7 @@ impl BaseConf {
 			is_mut,
 			bounds,
 			rounding_fn,
-			mult,
+			mult: mult.map( Box::new ),
 		})
 	}
 	
@@ -55,7 +55,7 @@ impl BaseConf {
 			is_mut,
 			bounds,
 			rounding_fn,
-			mult,
+			mult: mult.map( Box::new ),
 		})
 	}
 	
@@ -76,7 +76,7 @@ impl BaseConf {
 		Ok(())
 	}
 	
-	/// if `value` is outside the `bounds` then it's set to nearest valid value.
+	/// if `value` is outside the `self.bounds` then it's set to nearest valid value.
 	/// 
 	/// # Errors
 	/// `CsInvalidValue::Nan` when `value` is `f64::NAN` <br>
@@ -225,31 +225,32 @@ impl BaseConf {
 
 //priv
 impl BaseConf {
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_inval( value: f64, bounds: &Bounds ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( "value".to_string() ) )?
+			return Err( CsInvalidValue::Nan( "value".to_string() ).into() )
 		}
 		if value < bounds.min() {
 			
-			return Err( CsInvalidValue::BelowMinimum( "value".to_string() ) )?
+			//return Err( CsInvalidValue::BelowMinimum( "value".to_string() ).into() )
+			return Err( CsInvalidValue::BelowMinimum( "value".to_string() ).into() )
 		}
 		if value > bounds.max() {
 			
-			return Err( CsInvalidValue::AboveMaximum( "value".to_string() ) )?
+			return Err( CsInvalidValue::AboveMaximum( "value".to_string() ).into() )
 		}
 		
 		Ok(())
 	}
 	
-	#[inline(always)]
-	#[doc(hidden)]
+	#[inline( always )]
+	#[doc( hidden )]
 	fn check_nan( value: f64 ) -> Result<(), CharStatError > {
 		if value.is_nan() {
 			
-			return Err( CsInvalidValue::Nan( "value".to_string() ) )?
+			return Err( CsInvalidValue::Nan( "value".to_string() ).into() )
 		}
 		
 		Ok(())
@@ -260,7 +261,7 @@ impl BaseConf {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use crate::{ BaseConf, Bounds, RoundingFnEnum, RoundingHelper, CharStatError, CsInvalidValue };
 	

@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -11,6 +11,7 @@ use crate::{ Bounds, RoundingHelper, ModCalcMode, ModCalcStage, Modifier, CharSt
 //------------------------------------------------------------------------------
 // struct - ModConf
 
+/// Component handling every modifier stage other than modifier multiplier.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, PartialEq,  )]
 pub struct ModConf {
@@ -85,15 +86,15 @@ impl ModConf {
 // pub-crate
 impl ModConf {
 	#[inline]
-	#[doc(hidden)]
-	pub(crate) fn append_mod_unchecked ( &mut self, value: f64, modifier: Modifier ) {
+	#[doc( hidden )]
+	pub( crate ) fn append_mod_unchecked ( &mut self, value: f64, modifier: Modifier ) {
 		self.mod_vec.push( modifier );
 		self.update( value );
 	}
 	
 	#[inline]
-	#[doc(hidden)]
-	pub(crate) fn update ( &mut self, value: f64 ) {
+	#[doc( hidden )]
+	pub( crate ) fn update ( &mut self, value: f64 ) {
 		let mut tmp = 0.0;
 		
 		for el in &self.mod_vec {
@@ -171,7 +172,7 @@ impl ModConf {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use crate::{ ModConf, Modifier, ModCommon, ModCalcStage, ModCalcMode, Bounds, RoundingHelper, CsInvalidValue,  };
 	

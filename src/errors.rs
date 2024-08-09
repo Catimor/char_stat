@@ -125,6 +125,7 @@ impl Error for CsLogicIssue {}
 pub enum CsInvalidValue {
 	BelowMinimum( String ),
 	AboveMaximum( String ),
+	CannotBeZero( String ),
 	Nan( String ),
 }
 
@@ -132,7 +133,7 @@ impl Display for CsInvalidValue {
 	#[inline]
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		let mut tmp = match self {
-			Self::BelowMinimum( name ) | Self::AboveMaximum( name ) | Self::Nan( name ) => name,
+			Self::BelowMinimum( name ) | Self::AboveMaximum( name ) | Self::CannotBeZero( name ) | Self::Nan( name ) => name,
 		}.clone();
 		
 		tmp.push_str( " cannot be " );
@@ -140,6 +141,7 @@ impl Display for CsInvalidValue {
 		tmp.push_str( match self {
 			Self::BelowMinimum( _ ) => "lower than min",
 			Self::AboveMaximum( _ ) => "greater than max",
+			Self::CannotBeZero( _ ) => "equal to zero",
 			Self::Nan( _ ) => "NAN",
 		} );
 		

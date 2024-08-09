@@ -1,7 +1,6 @@
 use std::fmt::{ Display, Formatter };
-use derive_new::*;
 
-#[cfg(feature = "serde")]
+#[cfg( feature = "serde" )]
 use serde::{ Serialize, Deserialize };
 
 // --Imports
@@ -14,8 +13,9 @@ use crate::{ CharStatError, CsLogicIssue, CsInvalidValue };
 //------------------------------------------------------------------------------
 // struct - Modifier
 
+/// An instance of a modifier.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Debug, Clone, PartialEq )]
+#[derive( Debug, Clone, PartialEq,  )]
 pub struct Modifier {
 	common: ModCommon,
 	mod_type: ModType,
@@ -136,9 +136,15 @@ impl Modifier {
 			}
 			
 			let diff = ts - conf.last_ts;
-			let stacks_to_clear = diff / conf.duration;
+			let stacks_to_clear = u32::try_from( diff / conf.duration );
 			
-			conf.stack_value = conf.stack_value.saturating_sub( stacks_to_clear as u32 );
+			let stacks_to_clear = if let Ok( value ) = stacks_to_clear {
+				value
+			} else {
+				u32::MAX
+			};
+			
+			conf.stack_value = conf.stack_value.saturating_sub( stacks_to_clear );
 			
 			return Ok(())
 		}
@@ -152,7 +158,7 @@ impl Modifier {
 // enum - ModType
 
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Debug, Clone, PartialEq, Eq )]
+#[derive( Debug, Clone, PartialEq, Eq,  )]
 pub enum ModType {
 	Expiring{ exp_ts: u64 },
 	Persistent,
@@ -177,7 +183,7 @@ impl Display for ModType {
 // struct - ModCommon
 
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Debug, Clone, Copy, PartialEq )]
+#[derive( Debug, Clone, Copy, PartialEq,  )]
 pub struct ModCommon {
 	value: f64,
 	
@@ -214,8 +220,9 @@ impl ModCommon {
 //------------------------------------------------------------------------------
 // struct - ModStackConf
 
+/// Configguration for a stackable modifier.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
-#[derive( Debug, Clone, Copy, PartialEq, Eq, new )]
+#[derive( Debug, Clone, Copy, PartialEq, Eq )]
 pub struct ModStackConf {
 	last_ts: u64,
 	duration: u64,
@@ -224,10 +231,38 @@ pub struct ModStackConf {
 	stack_max: u32,
 }
 
+impl ModStackConf {
+	/// # Errors
+	/// `CsInvalidValue::CannotBeZero` when `duration == 0` <br>
+	/// `CsInvalidValue::AboveMaximum` when `stack_value > stack_max` <br>
+	#[inline]
+	pub fn new ( last_ts: u64, duration: u64, stack_value: u32, stack_max: u32, ) -> Result< Self, CharStatError > {
+		if duration == 0 {
+			return Err( CsInvalidValue::CannotBeZero( "duration".to_string() ).into() )
+		}
+		
+		if stack_value >= stack_max {
+			return Err( CsInvalidValue::AboveMaximum( "stack_value".to_string() ).into() )
+		}
+		
+		Ok( ModStackConf {
+			last_ts,
+			duration,
+			
+			stack_value,
+			stack_max,
+		} )
+	}
+}
+
 // struct - ModStackConf
 //------------------------------------------------------------------------------
 // enum - ModCalcMode
 
+/// Calculation Mode:
+/// - Add | Sub => value of modifier is added / substracted from the total,
+/// - Mul => adds to the total a result of multiplying base by modifier,
+/// - Div => adds to the total a result of dividing base by modifier,
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, Copy, PartialEq, Eq )]
 pub enum ModCalcMode {
@@ -255,6 +290,7 @@ impl Display for ModCalcMode {
 //------------------------------------------------------------------------------
 // enum - ModCalcStage
 
+/// Calculation Stage.
 #[cfg_attr( feature = "serde", derive( Serialize, Deserialize ) )]
 #[derive( Debug, Clone, Copy, PartialEq, Eq )]
 pub enum ModCalcStage {
@@ -282,7 +318,7 @@ impl Display for ModCalcStage {
 //------------------------------------------------------------------------------
 // --Tests
 
-#[cfg(test)]
+#[cfg( test )]
 mod tests {
 	use super::*;
 	
@@ -297,7 +333,7 @@ mod tests {
 		
 		let mod_2 = Modifier::new_persistent( common );
 		
-		let stack = ModStackConf::new( 0, 160, 0, 2 );
+		let stack = ModStackConf::new( 0, 160, 0, 2 ).unwrap();
 		let mod_3 = Modifier::new_stacked( common, stack );
 		
 		let _v = vec![ mod_1, mod_2, mod_3 ];
@@ -330,7 +366,7 @@ mod tests {
 	#[test]
 	fn stacked_mod() {
 		let common = ModCommon::new( 2.0, ModCalcMode::Add, ModCalcStage::Base ).unwrap();
-		let conf = ModStackConf::new( 0, 16, 0, 2 );
+		let conf = ModStackConf::new( 0, 16, 0, 2 ).unwrap();
 		let mut modif = Modifier::new_stacked( common, conf );
 		
 		assert_eq!( modif.stack_inc(), Ok(()) );

@@ -59,7 +59,6 @@ assert_eq!( example.value(), base_val + up_val )
 - `CharStat` holds all of the components
 	- all constructors require `BaseConf` passed by value
 	- all other components are passed as `Option< T >`, which are then turned into `Option< Box< T >>`. Box is used because enums allocate the same amount of memory on stack for every variant.
-	- 
 - `BaseConf` holds the base value
 	- value: `f64`
 	- adjustable mutability
@@ -125,7 +124,7 @@ assert_eq!( example.value(), base_val + up_val )
 CharStat uses custom enums which implement `std:error:Error` trait.
 - `CharStatError` - public facing type, wrapper for other types
 - `CsLogicIssue`: InvalidModifierStage, InvalidModifierMode, InvalidModifierType, MinGreaterThanMax, FieldIsConst, TimeTravel
-	> here, "Time travel" refers to a situation where new timestamp is lower ( refert to earlier point in time ) than the one already stored
+	> here, "Time travel" refers to a situation where new timestamp is lower ( refers to earlier point in time ) than the one already stored
 - `CsInvalidValue`: BelowMinimum, AboveMaximum, Nan
 - `CsMissingObject`: BaseMult, Upgrade, ModOfBase, ModOfUpgrade, ModOfBasePlusUpgrade, ModMult,
 
@@ -147,11 +146,11 @@ Default (None) = 1.0<br>
 Algoritm: round_fn( value / precision ) * precision<br>
 
 Example:<br>
-`let value = 1.56;`<br>
+`let value = 1.46;`<br>
 `let precision = 0.1;`<br>
-1. `1.56 / 0.1 = 15.6`
-2. `round( 15.6 ) = 16`
-3. `16 * 0.1 = 1.6`
+1. `1.46 / 0.1 = 14.6`
+2. `round( 14.6 ) = 15`
+3. `15 * 0.1 = 1.5`
 
 
 ## Versioning
